@@ -1,0 +1,6 @@
+pandas
+numpy
+scipy
+plotly
+uncertainties
+pydantic  # Für saubere Datenstrukturen/Validierung der JSONs
