@@ -1,0 +1,8 @@
+{
+    "Linac": "1",
+    "group": "couch_90_head_minus90_repeat",
+    "heatingpads": "32",
+    "etds_timestamp": "170444",
+    "surf_timestamp": "165141",
+    "couch_angle": 90
+}
