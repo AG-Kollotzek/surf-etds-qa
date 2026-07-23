@@ -8,68 +8,6 @@ from uncertainties import unumpy as unp
 import datetime
 import os
 
-MEASUREMENT_10032026 = {
-    '1': {'Gruppe': 'All axes', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': 'OFF', 'ETD': '160617',
-          'CSV': '160448', 'title': 'H, V, R'},
-    '2': {'Gruppe': 'All axes', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': 'OFF', 'ETD': '161117',
-          'CSV': '160950', 'title': 'H, V, R'},
-    '3': {'Gruppe': 'All axes', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': 'OFF', 'ETD': '161416',
-          'CSV': '161302', 'title': 'H, V, R'},
-    '4': {'Gruppe': 'Horizontal', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': 'OFF', 'ETD': '161724',
-          'CSV': '161538', 'title': 'H'},
-    '5': {'Gruppe': 'Horizontal', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': 'OFF', 'ETD': '162054',
-          'CSV': '161859', 'title': 'H'},
-    '6': {'Gruppe': 'Horizontal', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': 'OFF', 'ETD': '162326',
-          'CSV': '162130', 'title': 'H'},
-    '7': {'Gruppe': 'Vertical', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': 'OFF', 'ETD': '162647',
-          'CSV': '162451', 'title': 'V'},
-    '8': {'Gruppe': 'Vertical', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': 'OFF', 'ETD': '162922',
-          'CSV': '162728', 'title': 'V'},
-    '9': {'Gruppe': 'Vertical', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': 'OFF', 'ETD': '163157',
-          'CSV': '162951', 'title': 'V'},
-    '10': {'Gruppe': 'Rotation', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': 'OFF', 'ETD': '163508',
-           'CSV': '163325', 'title': 'R'},
-    '11': {'Gruppe': 'Rotation', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': 'OFF', 'ETD': '163758',
-           'CSV': '163613', 'title': 'R'},
-    '12': {'Gruppe': 'Rotation', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': 'OFF', 'ETD': '164007',
-           'CSV': '163820', 'title': 'R'},
-    '14': {'Gruppe': 'Variable_Geschwindigkeit', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': 'OFF', 'ETD': '173928',
-           'CSV': '173645'},
-    '15': {'Gruppe': 'Variable_Geschwindigkeit', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': 'OFF', 'ETD': '174334',
-           'CSV': '174056'},
-    '16': {'Gruppe': 'Variable_Geschwindigkeit', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': 'OFF', 'ETD': '174832',
-           'CSV': '174558'},
-    '17': {'Gruppe': 'Variable_Geschwindigkeit', 'ROI_Area': 'Fitting', 'Heatingpads': 'OFF', 'ETD': '175259',
-           'CSV': '175019'},
-    '18': {'Gruppe': 'Variable_Geschwindigkeit', 'ROI_Area': 'OnlyFrontSurface', 'Heatingpads': 'OFF', 'ETD': '175635',
-           'CSV': '175356'},
-    '19': {'Gruppe': 'Variable_Geschwindigkeit', 'ROI_Area': 'Fiting', 'Heatingpads': 'OFF', 'ETD': '180108',
-           'CSV': '175824'},
-    '21': {'Gruppe': 'Vertical_Slide', 'Heatingpads': 'OFF', 'ETD': '182337', 'CSV': '182011'},
-    '22': {'Gruppe': 'Vertical_Slide', 'Heatingpads': 'OFF', 'ETD': '182630', 'CSV': '182433'},
-    '24': {'Gruppe': 'Horizontal', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': '32', 'ETD': '190312',
-           'CSV': '190114', 'title': 'H'},
-    '25': {'Gruppe': 'Horizontal', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': '32', 'ETD': '190609',
-           'CSV': '190405', 'title': 'H'},
-    '26': {'Gruppe': 'Horizontal', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': '32', 'ETD': '190831',
-           'CSV': '190639', 'title': 'H'},
-    '27': {'Gruppe': 'Vertical', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': '32', 'ETD': '191212',
-           'CSV': '191006', 'title': 'V'},
-    '28': {'Gruppe': 'Vertical', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': '32', 'ETD': '191421',
-           'CSV': '191235', 'title': 'V'},
-    '29': {'Gruppe': 'Vertical', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': '32', 'ETD': '191651',
-           'CSV': '191507', 'title': 'V'},
-    '30': {'Gruppe': 'Rotation', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': '32', 'ETD': '192007',
-           'CSV': '191806', 'title': 'R'},
-    '31': {'Gruppe': 'Rotation', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': '32', 'ETD': '192224',
-           'CSV': '192031', 'title': 'R'},
-    '32': {'Gruppe': 'Rotation', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': '32', 'ETD': '192441',
-           'CSV': '192250', 'title': 'R'},
-    '33': {'Gruppe': 'Variable_Geschwindigkeit', 'ROI_Area': 'PhantomWithBuffer', 'Heatingpads': '32', 'ETD': '192853',
-           'CSV': '192615'},
-    '34': {'Gruppe': 'Vertical_Slide', 'Heatingpads': '32', 'ETD': '193528', 'CSV': '193140'},
-    '35': {'Gruppe': 'Vertical_Slide', 'Heatingpads': '32', 'ETD': '193801', 'CSV': '193557'},
-}
 
 class ETDQAProcessor:
     def __init__(self, terminal_version='legacy'):
@@ -93,9 +31,9 @@ class ETDQAProcessor:
         # --- SMART SIGN CORRECTION ---t
         if self.terminal_version == 'legacy':
             # Korrektur für Longitudinal (H) und Rotation (R)
-            self.df_csv['Pos_H'] = self.df_csv['Pos_H'] * -1
+            #self.df_csv['Pos_H'] = self.df_csv['Pos_H'] * -1
             self.df_csv['Pos_R'] = self.df_csv['Pos_R'] * -1
-            print(f"INFO: Legacy-Mode aktiv. Vorzeichen für Pos_H und Pos_R wurden invertiert.")
+            print(f"INFO: Legacy-Mode aktiv. Vorzeichen für Pos_R wurden invertiert.")
 
         return self.df_csv
 
@@ -153,104 +91,133 @@ class ETDQAProcessor:
             self.df_csv[f"{key}_upper"] = self.df_csv[key] + self.df_csv[f"{key}_std"]
             self.df_csv[f"{key}_lower"] = self.df_csv[key] - self.df_csv[f"{key}_std"]
 
-    def align_signals(self, sync_axis='Pos_H', threshold=4.5, csv_sync_window=None):
-        """Synchronisiert und speichert die exakten Zeiten der Peaks für das spätere Cropping.
-           csv_sync_window: (t_min, t_max) in Sekunden, um falsche Peaks in der CSV zu ignorieren."""
+    def align_and_crop_signals(self, measurement_group='mindev', sync_axis='Pos_H', threshold=3.0, pad_sec=5.0):
+        """
+        1. Findet Peaks in CSV und JSON.
+        2. Berechnet den Skalierungsfaktor und Offset (Alignment der Zeitachsen).
+        3. Skaliert die JSON-Zeitachse passend auf die CSV-Zeitachse.
+        4. Schneidet (croppt) beide DataFrames exakt auf [Peak_1 - pad_sec ... Peak_2 + pad_sec] zu.
+        (Keine Baseline-Nullung!)
+        """
 
-        def get_peak_info(times, values, thresh, window=None):
-            values_check = values.copy()
+        def get_peaks(times, level, min_dur=0.5, max_dur=5.0, vel_tol=0.6,
+                      amp_min=2.5, amp_max=8.0, level_tol=1.5):
+            """
+            Findet die Sync-Pulse (kurzer 5-mm-Hub, der auf das Ausgangsniveau zurückkehrt).
 
-            # NEU: Filtere falsche Peaks durch virtuelles Nullen aus
-            if window is not None:
-                t_min, t_max = window
-                mask_out = (times < t_min) | (times > t_max)
-                values_check.loc[mask_out] = 0.0
+            Statt "Ausschlag gegen ein gleitendes Median-Baseline" (das bei 2-s-Pulsen
+            zusammenbricht) wird hier über den Stillstand der Achsen segmentiert:
+            Ein Sync-Puls ist ein kurzes Plateau, dessen Nachbar-Plateaus dasselbe
+            Niveau haben. Damit sind Sync-Pulse eindeutig von den Fahrten in die
+            Messposition unterscheidbar - die enden auf einem anderen Niveau.
 
-            v_smooth = pd.Series(values_check).rolling(window=5, center=True).median().fillna(0).values
-            mask = np.abs(v_smooth) > thresh
+            times: 1D-Zeitachse, level: (N, k)-Array der Achsen/DoF.
+            """
+            t = np.asarray(times, dtype=float)
+            L = np.atleast_2d(np.asarray(level, dtype=float))
+            if L.shape[0] != len(t):
+                L = L.T
 
-            # Finde Kanten
-            edges = np.diff(mask.astype(int), prepend=0, append=0)
+            dt = np.gradient(t)
+            dt[dt == 0] = np.nan
+            speed = np.sum(np.abs(np.gradient(L, axis=0)), axis=1) / dt
+            speed = pd.Series(speed).rolling(5, center=True, min_periods=1).median().bfill().ffill().values
+
+            still = speed < vel_tol
+            edges = np.diff(still.astype(int), prepend=0, append=0)
             starts = np.where(edges == 1)[0]
-            # Korrektur: Wir nehmen den Index des letzten 'True' Werts
             ends = np.where(edges == -1)[0] - 1
 
-            if len(starts) < 2:
-                return None, None, None, None
+            plateaus = [[s, e, np.median(L[s:e + 1], axis=0)]
+                        for s, e in zip(starts, ends) if t[e] - t[s] > 0.2]
 
-            # --- BIAS-FIX: FLOAT-PRÄZISION STATT INT-RUNDUNG ---
-            # Wir nehmen den zeitlichen Mittelpunkt zwischen Start und Ende der Flanken
-            t_first_mid = (times.iloc[starts[0]] + times.iloc[ends[0]]) / 2.0
-            t_last_mid = (times.iloc[starts[-1]] + times.iloc[ends[-1]]) / 2.0
+            # ETD-Rauschen zerhackt lange Plateaus -> gleiche Niveaus wieder verschmelzen
+            merged = []
+            for p in plateaus:
+                if merged and np.linalg.norm(p[2] - merged[-1][2]) < level_tol:
+                    merged[-1][1] = p[1]
+                    merged[-1][2] = np.median(L[merged[-1][0]:p[1] + 1], axis=0)
+                else:
+                    merged.append(p)
 
-            t_first_start = times.iloc[starts[0]]
-            t_last_end = times.iloc[ends[-1]]
+            valid_peaks = []
+            for i in range(1, len(merged) - 1):
+                s, e, lvl = merged[i]
+                duration = t[e] - t[s]
+                if not (min_dur <= duration <= max_dur):
+                    continue
 
-            return t_first_mid, t_last_mid, t_first_start, t_last_end
+                prev_lvl, next_lvl = merged[i - 1][2], merged[i + 1][2]
+                if np.linalg.norm(prev_lvl - next_lvl) > level_tol:
+                    continue  # kein Rücksprung -> Fahrt in die Messposition, kein Sync-Puls
 
-        # Peak-Zeiten ermitteln (CSV übergibt jetzt das window!)
-        csv_first, csv_last, csv_start, csv_end = get_peak_info(self.df_csv['Time_Sec'], self.df_csv[sync_axis],
-                                                                threshold, window=csv_sync_window)
-        json_first, json_last, _, _ = get_peak_info(self.df_json['Time_Sec'], self.df_json['Vector_Mag'], threshold,
-                                                    window=None)
+                a_in = np.linalg.norm(lvl - prev_lvl)
+                a_out = np.linalg.norm(lvl - next_lvl)
+                if not (amp_min <= min(a_in, a_out) and max(a_in, a_out) <= amp_max):
+                    continue
 
-        if csv_first is None or json_first is None:
-            raise ValueError("Nicht genügend 5mm Peaks für Sync gefunden.")
+                valid_peaks.append({'mid': (t[s] + t[e]) / 2.0, 'start': t[s], 'end': t[e]})
+            return valid_peaks
 
-        scale_factor = (csv_last - csv_first) / (json_last - json_first)
-        self.df_json['Time_Sec'] = (self.df_json['Time_Sec'] - json_first) * scale_factor + csv_first
-        self.time_offset = 0
+        # --- 1. Sync-Pulse in CSV finden (Hardware-Achsen) ---
+        csv_peaks = get_peaks(self.df_csv['Time_Sec'].values,
+                              self.df_csv[['Pos_H', 'Pos_V', 'Pos_R']].values)
 
-        # Tracking-Lost Zeiten an das CSV-Alignment anpassen
+        # --- 2. Sync-Pulse in JSON finden (ETD-Translationen) ---
+        json_peaks = get_peaks(self.df_json['Time_Sec'].values,
+                               self.df_json[['lateral', 'longitudinal', 'vertical']].values)
+
+        # --- 3. Welches Paar aus der CSV gehört zu dieser Messung? ---
+        pair_idx = 0
+        group_lower = measurement_group.lower()
+
+        if 'maxdev' in group_lower:
+            pair_idx = 1
+        elif group_lower == 'couch_90':
+            pair_idx = 1
+        elif group_lower == 'couch_90_head_minus90' and 'repeat' not in group_lower:
+            pair_idx = 2
+        elif group_lower == 'couch_90_head_minus90_repeat':
+            pair_idx = 3
+
+        if len(csv_peaks) < (pair_idx * 2 + 2):
+            raise ValueError(
+                f"Nicht genügend Peaks in CSV! (Suche Paar {pair_idx + 1}, aber nur {len(csv_peaks)} gefunden)")
+        if len(json_peaks) < 2:
+            raise ValueError(f"Nicht genügend Peaks in JSON! (Gefunden: {len(json_peaks)}, Erwartet: mind. 2)")
+
+        csv_first = csv_peaks[pair_idx * 2]
+        csv_last = csv_peaks[pair_idx * 2 + 1]
+        json_first = json_peaks[0]
+        json_last = json_peaks[-1]
+
+        # --- 4. Zeitskalierung & Alignment (Dein bewährtes Verfahren) ---
+        scale_factor = (csv_last['mid'] - csv_first['mid']) / (json_last['mid'] - json_first['mid'])
+        self.df_json['Time_Sec'] = (self.df_json['Time_Sec'] - json_first['mid']) * scale_factor + csv_first['mid']
+
+        # Tracking Lost Zeiten mitskalieren
         if hasattr(self, 'lost_times_sec') and self.lost_times_sec:
-            self.lost_times_aligned = [(t - json_first) * scale_factor + csv_first for t in self.lost_times_sec]
+            self.lost_times_aligned = [(t - json_first['mid']) * scale_factor + csv_first['mid'] for t in
+                                       self.lost_times_sec]
         else:
             self.lost_times_aligned = []
 
-        # WICHTIG: Start und Ende für die Baseline-Korrektur speichern
-        self.sync_t_start = csv_start
-        self.sync_t_end = csv_end
+        # --- 5. Cropping: Exakt 5s vor dem ersten und 5s nach dem letzten Peak ---
+        crop_start = csv_first['mid'] - pad_sec
+        crop_end = csv_last['mid'] + pad_sec
 
-        print(f"Sync erfolgreich (Skalierung: {scale_factor:.6f}, Referenz-Peak: {csv_first:.2f}s)")
-        return scale_factor
-
-    def apply_baseline_and_crop(self):
-        """Nullt die Achsen präzise an den Sync-Peaks und schneidet Vorlauf ab."""
-        if not hasattr(self, 'sync_t_start'):
-            print("FEHLER: Führe zuerst align_signals() aus!")
-            return
-
-        t_start = self.sync_t_start
-        t_end = self.sync_t_end
-        csv_time = self.df_csv['Time_Sec']
-
-        # 1. Smarte Maske: Wir nehmen exakt das Fenster 1 bis 6 Sekunden VOR dem ersten Peak
-        # und 1 bis 6 Sekunden NACH dem letzten Peak (um aus den Flanken raus zu sein).
-        base_mask = ((csv_time >= t_start - 6.0) & (csv_time <= t_start - 1.0)) | \
-                    ((csv_time >= t_end + 1.0) & (csv_time <= t_end + 6.0))
-
-        if not base_mask.any():
-            base_mask = (csv_time < t_start)  # Fallback
-
-        print(f"Führe Baseline-Korrektur durch (Referenzfenster: {base_mask.sum()} Punkte)...")
-
-        # 2. Offset von allen kinematischen Spalten (inkl. Schläuche) abziehen
-        keys = ['True_Lateral', 'True_Longitudinal', 'True_Vertical', 'True_Pitch', 'True_Roll', 'True_Yaw']
-        for key in keys:
-            offset = np.median(self.df_csv.loc[base_mask, key])
-            self.df_csv[key] -= offset
-            self.df_csv[f"{key}_upper"] -= offset
-            self.df_csv[f"{key}_lower"] -= offset
-
-        # 3. Cropping: Wir schneiden alles ab, was mehr als 5 Sekunden vor dem ersten Peak liegt
-        crop_time = t_start - 5.0
-        self.df_csv = self.df_csv[self.df_csv['Time_Sec'] >= crop_time].reset_index(drop=True)
-        self.df_json = self.df_json[self.df_json['Time_Sec'] >= crop_time].reset_index(drop=True)
+        self.df_csv = self.df_csv[
+            (self.df_csv['Time_Sec'] >= crop_start) & (self.df_csv['Time_Sec'] <= crop_end)].reset_index(drop=True)
+        self.df_json = self.df_json[
+            (self.df_json['Time_Sec'] >= crop_start) & (self.df_json['Time_Sec'] <= crop_end)].reset_index(drop=True)
 
         if hasattr(self, 'lost_times_aligned'):
-            self.lost_times_aligned = [t for t in self.lost_times_aligned if t >= crop_time]
+            self.lost_times_aligned = [t for t in self.lost_times_aligned if crop_start <= t <= crop_end]
 
-        print(f"-> Daten gecroppt. Plot startet nun exakt 5s vor dem ersten Peak.")
+        print(
+            f"-> Alignment & Cropping erfolgreich (Scale: {scale_factor:.6f} | Spanne: {crop_start:.1f}s bis {crop_end:.1f}s). Keine Baseline-Korrektur.")
+        return scale_factor
+
 
     def plot_sync_check(self):
         """Visualisierung aller 6 DoF inkl. Unsicherheits-Schläuchen."""
