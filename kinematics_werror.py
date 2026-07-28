@@ -71,7 +71,8 @@ class SurfKinematics:
         # Bei +90° Couchrotation wird Pitch zu Roll und Roll zu Pitch
         pitch_global = pitch_deg_local * cos_g - roll_deg_local * sin_g ##wichtig wegen rot
         roll_global = pitch_deg_local * sin_g + roll_deg_local * cos_g
-        yaw_global = yaw_deg_local - gamma # Der interne Yaw der Achse bleibt relativ zum Raum gleich additiv, jedoch hat die Test Unit bei gedrehtem tisch das phantom um 90 Grad wieder zum scanner gedreht
+        gamma_deg = unp.degrees(gamma)
+        yaw_global = yaw_deg_local - gamma_deg # Der interne Yaw der Achse bleibt relativ zum Raum gleich additiv, jedoch hat die Test Unit bei gedrehtem tisch das phantom um 90 Grad wieder zum scanner gedreht
 
         return {
             'True_Lateral': x_global,

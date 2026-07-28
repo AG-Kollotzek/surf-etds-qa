@@ -3,7 +3,7 @@ import numpy as np
 import json
 import plotly.graph_objects as go
 from kinematics import SurfKinematics as SurfKinematicsNominal
-from kinematics_werror import SurfKinematics
+from kinematics_werror_v2 import SurfKinematics
 from uncertainties import unumpy as unp
 import datetime
 import os
@@ -20,6 +20,8 @@ class ETDQAProcessor:
         self.df_json = None
         self.time_offset = 0
         self.terminal_version = terminal_version
+        # Wird von align_and_crop_signals gefüllt (Sync-Puls-Zeiten, definieren das Messfenster)
+        self.sync_info = None
 
         self.kinematics_werror_dict = {}
 
@@ -91,13 +93,18 @@ class ETDQAProcessor:
             self.df_csv[f"{key}_upper"] = self.df_csv[key] + self.df_csv[f"{key}_std"]
             self.df_csv[f"{key}_lower"] = self.df_csv[key] - self.df_csv[f"{key}_std"]
 
-    def align_and_crop_signals(self, measurement_group='mindev', sync_axis='Pos_H', threshold=3.0, pad_sec=5.0):
+    def align_and_crop_signals(self, measurement_group='mindev', sync_axis='Pos_H', threshold=3.0, pad_sec=5.0,
+                               etds_timestamp=None, surf_timestamp=None):
         """
         1. Findet Peaks in CSV und JSON.
         2. Berechnet den Skalierungsfaktor und Offset (Alignment der Zeitachsen).
         3. Skaliert die JSON-Zeitachse passend auf die CSV-Zeitachse.
         4. Schneidet (croppt) beide DataFrames exakt auf [Peak_1 - pad_sec ... Peak_2 + pad_sec] zu.
         (Keine Baseline-Nullung!)
+
+        etds_timestamp/surf_timestamp (Format HHMMSS, aus der Config): werden benötigt, wenn
+        sich mehrere ETD-Scans dieselbe CSV teilen (z.B. die Couch-Rotations-Serie) - darüber
+        wird das richtige Sync-Puls-Paar in der CSV gefunden (siehe Schritt 3).
         """
 
         def get_peaks(times, level, min_dur=0.5, max_dur=5.0, vel_tol=0.6,
@@ -168,17 +175,27 @@ class ETDQAProcessor:
                                self.df_json[['lateral', 'longitudinal', 'vertical']].values)
 
         # --- 3. Welches Paar aus der CSV gehört zu dieser Messung? ---
+        # Mehrere ETD-Scans können sich dieselbe CSV teilen (z.B. die Couch-Rotations-Serie,
+        # ein CSV-Lauf mit 4 Sync-Puls-Paaren für 4 ETD-Scans). Das richtige Paar wird über
+        # den bekannten Wanduhr-Versatz zwischen SURF- und ETD-Start gefunden: das Paar, dessen
+        # Zeitstempel in der CSV am nächsten an (etds_start - surf_start) liegt. Das ist robust
+        # gegen Gruppennamen (anders als eine Heuristik auf Basis von measurement_group).
         pair_idx = 0
-        group_lower = measurement_group.lower()
+        n_pairs = len(csv_peaks) // 2
 
-        if 'maxdev' in group_lower:
-            pair_idx = 1
-        elif group_lower == 'couch_90':
-            pair_idx = 1
-        elif group_lower == 'couch_90_head_minus90' and 'repeat' not in group_lower:
-            pair_idx = 2
-        elif group_lower == 'couch_90_head_minus90_repeat':
-            pair_idx = 3
+        if n_pairs > 1:
+            if etds_timestamp is None or surf_timestamp is None:
+                raise ValueError(
+                    f"CSV enthält {n_pairs} Sync-Puls-Paare - ohne etds_timestamp/surf_timestamp "
+                    f"kann das richtige Paar nicht eindeutig bestimmt werden.")
+
+            def _hhmmss_to_sec(stamp):
+                s = str(stamp)
+                return int(s[0:2]) * 3600 + int(s[2:4]) * 60 + int(s[4:6])
+
+            offset_sec = _hhmmss_to_sec(etds_timestamp) - _hhmmss_to_sec(surf_timestamp)
+            pair_mids = [(csv_peaks[2 * i]['mid'] + csv_peaks[2 * i + 1]['mid']) / 2.0 for i in range(n_pairs)]
+            pair_idx = int(np.argmin([abs(mid - offset_sec) for mid in pair_mids]))
 
         if len(csv_peaks) < (pair_idx * 2 + 2):
             raise ValueError(
@@ -194,6 +211,23 @@ class ETDQAProcessor:
         # --- 4. Zeitskalierung & Alignment (Dein bewährtes Verfahren) ---
         scale_factor = (csv_last['mid'] - csv_first['mid']) / (json_last['mid'] - json_first['mid'])
         self.df_json['Time_Sec'] = (self.df_json['Time_Sec'] - json_first['mid']) * scale_factor + csv_first['mid']
+
+        # --- 4b. Sync-Zeitstempel festhalten ---
+        # Nach dem Alignment liegen die Sync-Pulse beider Systeme per Konstruktion exakt
+        # aufeinander, d.h. die gemeinsame (CSV-)Zeitbasis der Sync-Mitten ist csv_first/csv_last.
+        # Trotzdem werden die ETD-Rohzeiten mitgespeichert: damit lässt sich später ohne erneutes
+        # Alignment in die unveränderte TrackingResult-JSON zurückspringen.
+        # Diese Zeitstempel definieren das Messfenster (siehe qa_metrics.measurement_window).
+        self.sync_info = {
+            'aligned_first_mid': float(csv_first['mid']),
+            'aligned_last_mid': float(csv_last['mid']),
+            'phantom_first_mid': float(csv_first['mid']),
+            'phantom_last_mid': float(csv_last['mid']),
+            'etd_raw_first_mid': float(json_first['mid']),
+            'etd_raw_last_mid': float(json_last['mid']),
+            'scale_factor': float(scale_factor),
+            'csv_pair_index': int(pair_idx),
+        }
 
         # Tracking Lost Zeiten mitskalieren
         if hasattr(self, 'lost_times_sec') and self.lost_times_sec:

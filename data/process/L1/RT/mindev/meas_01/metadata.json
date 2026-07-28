@@ -1,6 +1,7 @@
 {
     "Linac": "1",
-    "group": "mindev",
+    "dev": "min",
+    "meas_couch_type": "single angle",
     "heatingpads": "OFF",
     "etds_timestamp": "161959",
     "surf_timestamp": "161730",

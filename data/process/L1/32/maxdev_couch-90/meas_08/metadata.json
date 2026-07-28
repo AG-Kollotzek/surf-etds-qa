@@ -1,0 +1,9 @@
+{
+    "Linac": "1",
+    "dev": "max",
+    "meas_couch_type": "multi angle",
+    "heatingpads": "32",
+    "etds_timestamp": "170444",
+    "surf_timestamp": "165141",
+    "couch_angle": -90
+}

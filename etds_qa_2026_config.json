@@ -1,7 +1,8 @@
 {
   "1": {
     "Linac": "1",
-    "group": "mindev",
+    "deflection": 1,
+    "meas_couch_type": "single angle",
     "heatingpads": "OFF",
     "etds_timestamp": "161959",
     "surf_timestamp": "161730",
@@ -9,7 +10,8 @@
   },
   "2": {
     "Linac": "1",
-    "group": "maxdev",
+    "deflection": 2,
+    "meas_couch_type": "single angle",
     "heatingpads": "OFF",
     "etds_timestamp": "162341",
     "surf_timestamp": "161730",
@@ -17,7 +19,8 @@
   },
   "3": {
     "Linac": "1",
-    "group": "mindev",
+    "deflection": 1,
+    "meas_couch_type": "single angle",
     "heatingpads": "32",
     "etds_timestamp": "164209",
     "surf_timestamp": "163942",
@@ -25,7 +28,8 @@
   },
   "4": {
     "Linac": "1",
-    "group": "maxdev",
+    "deflection": 2,
+    "meas_couch_type": "single angle",
     "heatingpads": "32",
     "etds_timestamp": "164610",
     "surf_timestamp": "163942",
@@ -33,7 +37,8 @@
   },
   "5": {
     "Linac": "1",
-    "group": "couch_0_mindev",
+    "deflection": 1,
+    "meas_couch_type": "multi angle",
     "heatingpads": "32",
     "etds_timestamp": "165301",
     "surf_timestamp": "165141",
@@ -41,26 +46,29 @@
   },
   "6": {
     "Linac": "1",
-    "group": "couch_90_maxdev",
+    "deflection": 2,
+    "meas_couch_type": "multi angle",
     "heatingpads": "32",
     "etds_timestamp": "165554",
     "surf_timestamp": "165141",
-    "couch_angle": 90
+    "couch_angle": 0
   },
   "7": {
     "Linac": "1",
-    "group": "couch_90_head_minus90",
+    "deflection": 1,
+    "meas_couch_type": "multi angle",
     "heatingpads": "32",
     "etds_timestamp": "170146",
     "surf_timestamp": "165141",
-    "couch_angle": 90
+    "couch_angle": -90
   },
   "8": {
     "Linac": "1",
-    "group": "couch_90_head_minus90_repeat",
+    "deflection": 2,
+    "meas_couch_type": "multi angle",
     "heatingpads": "32",
     "etds_timestamp": "170444",
     "surf_timestamp": "165141",
-    "couch_angle": 90
+    "couch_angle": -90
   }
 }

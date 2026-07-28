@@ -11,6 +11,10 @@ from matplotlib.patches import ConnectionPatch
 import gc
 
 from DataConverter import ETDQAProcessor
+import qa_metrics
+from qa_metrics import DOF_SPEC, DOF_BY_NAME
+import sphere_detection
+from qa_plots import plot_qa_overview
 
 # ==========================================
 # KONFIGURATION & GLOBALE VARIABLEN
@@ -19,17 +23,14 @@ CONFIG_JSON_PATH = "etds_qa_2026_config.json"
 ZOOM_CONFIG_FILE = "zoom_box_config.json"
 
 # Spalten-Konfiguration für Export
-ETD_COLS = ['Time_Sec', 'lateral', 'longitudinal', 'vertical', 'pitch', 'yaw', 'roll']
+# rmse3d/rmse_temp werden mitexportiert, damit die 02-CSV ohne die Roh-JSON auswertbar ist.
+ETD_COLS = ['Time_Sec', 'lateral', 'longitudinal', 'vertical', 'pitch', 'yaw', 'roll',
+            'rmse3d', 'rmse_temp']
 PHANTOM_COLS = ['Time_Sec', 'True_Lateral', 'True_Longitudinal', 'True_Vertical', 'True_Pitch', 'True_Yaw', 'True_Roll']
 
-DOF_PAIRS = {
-    'lateral': ('True_Lateral', 'lateral'),
-    'longitudinal': ('True_Longitudinal', 'longitudinal'),
-    'vertical': ('True_Vertical', 'vertical'),
-    'pitch': ('True_Pitch', 'pitch'),
-    'yaw': ('True_Yaw', 'yaw'),
-    'roll': ('True_Roll', 'roll')
-}
+# Modi der Kommandozeile. 'plot'/'deviation' bleiben als Aliase der frueheren Namen erhalten.
+MODE_ALIASES = {'plot': 'plotpaper', 'deviation': 'process'}
+VALID_MODES = ('process', 'plotpaper', 'plotqa', 'numqa')
 
 
 # ==========================================
@@ -56,7 +57,12 @@ def save_7d_array(df, columns, save_path):
 
 
 def calculate_and_save_rmse(df_etd, df_phantom, out_dir):
-    """Interpoliert ETD auf Phantom und berechnet RMSE für alle 6 DoF"""
+    """RMSE über den gesamten exportierten Bereich (Übersichtswert, kein Messfenster).
+
+    Nutzt DOF_SPEC, damit die Vorzeichen-Konvention (insbesondere die invertierte
+    ETD-Vertikalachse) identisch zu Plots und numqa-Auswertung ist. Die eigentliche
+    QA-Auswertung im Messfenster passiert in qa_metrics.compute_dof_metrics.
+    """
     if df_etd.empty or df_phantom.empty:
         return None
 
@@ -64,16 +70,16 @@ def calculate_and_save_rmse(df_etd, df_phantom, out_dir):
     t_etd = df_etd['Time_Sec'].values
     rmse_results = {}
 
-    for dof_name, (phantom_col, etd_col) in DOF_PAIRS.items():
-        if phantom_col not in df_phantom.columns or etd_col not in df_etd.columns:
+    for dof in DOF_SPEC:
+        if dof.phantom_col not in df_phantom.columns or dof.etd_col not in df_etd.columns:
             continue
 
-        phantom_vals = df_phantom[phantom_col].values
-        etd_vals = df_etd[etd_col].values
+        phantom_vals = df_phantom[dof.phantom_col].values
+        etd_vals = dof.etd_values(df_etd)
 
         etd_interpolated = np.interp(t_phantom, t_etd, etd_vals, left=etd_vals[0], right=etd_vals[-1])
-        diff = phantom_vals - etd_interpolated
-        rmse_results[dof_name] = np.sqrt(np.mean(diff ** 2))
+        diff = etd_interpolated - phantom_vals
+        rmse_results[dof.name] = np.sqrt(np.mean(diff ** 2))
 
     df_rmse = pd.DataFrame([rmse_results])
     output_path = out_dir / "03_alldof_rmse.csv"
@@ -398,151 +404,393 @@ def plot_evaluation_results_interactive(
 # ==========================================
 # HAUPTSKRIPT & BATCH-LOGIK
 # ==========================================
-def main():
-    if len(sys.argv) < 4:
-        print("Nutzung: python etds_qa_evaluation.py <mode: plot/rmse> <linac_id> <pads: RT/32>")
-        print("Beispiel: python etds_qa_evaluation.py plot 1 32")
+def meas_couch_type_folder(meta):
+    """Einzige verbleibende Ordnerebene unter L<n>/: 'single_angle' oder 'multi_angle'."""
+    return str(meta.get("meas_couch_type", "unknown")).replace(" ", "_")
+
+
+def group_label(meta, linac, pad_folder_name):
+    """Beschreibender Name einer physischen Messreihe (Deflection/Couch/Pads), ohne Datum.
+    Stabiler Key für die Zoom-Box-Konfiguration und Basis für Ordner-/Plotnamen - bleibt über
+    mehrere Verarbeitungsläufe (verschiedene Tage) hinweg für dieselbe Messreihe gleich."""
+    deflection = meta.get("deflection", "?")
+    couch_angle = int(meta.get("couch_angle", 0))
+    return f"L{linac}_{pad_folder_name}_Deflection{deflection}_Couch{couch_angle}"
+
+
+def measurement_folder_name(meta, linac, pad_folder_name, date_str):
+    """Voller Ordnername für einen einzelnen Verarbeitungslauf, ersetzt die frühere
+    group-Ordner/meas_XX-Verschachtelung (z.B. 'L1_RT_Deflection1_Couch-90_2026-07-28')."""
+    return f"{group_label(meta, linac, pad_folder_name)}_{date_str}"
+
+
+def _parse_optional_filter(argv, idx):
+    """Liest sys.argv[idx], falls vorhanden. Leerer String oder 'all' (auch fehlendes
+    Argument) bedeutet: kein Filter, also alle Werte zulassen."""
+    if len(argv) <= idx:
+        return None
+    val = argv[idx].strip()
+    if val == "" or val.lower() == "all":
+        return None
+    return val
+
+
+def select_measurements(full_config, target_linac, deflection_filter=None, pads_filter=None):
+    """Alle Config-Einträge eines Linacs, gefiltert nach Deflection und Heatingpads.
+
+    pads_filter kommt in Kommandozeilen-Schreibweise ('RT'/'32'); 'RT' entspricht 'OFF'
+    in der Config. None bedeutet jeweils 'kein Filter'.
+    """
+    pads_target = None
+    if pads_filter is not None:
+        pads_target = "OFF" if pads_filter.upper() == "RT" else pads_filter.upper()
+
+    selected = []
+    for m_id, meta in full_config.items():
+        if meta.get("Linac") != target_linac:
+            continue
+        if deflection_filter is not None and str(meta.get("deflection", "")) != deflection_filter:
+            continue
+        if pads_target is not None and str(meta.get("heatingpads", "")).upper() != pads_target:
+            continue
+        selected.append((m_id, meta))
+
+    return selected
+
+
+def process_measurement(m_id, meta, target_linac, raw_base_dir, process_base_dir, date_str):
+    """Verarbeitet eine einzelne Messung: Alignment, Kinematik, Export 01/02/03.
+
+    Rückgabe: record-dict mit den ausgerichteten DataFrames und dem Sync-Zeitstempel-Block,
+    oder None wenn die Rohdaten fehlen. Fehler beim Verarbeiten werden nach oben gereicht.
+    """
+    pad_folder_name = "32" if meta.get("heatingpads") == "32" else "RT"
+    g_label = group_label(meta, target_linac, pad_folder_name)
+    couch_folder = meas_couch_type_folder(meta)
+
+    etd_stamp = meta["etds_timestamp"]
+    surf_stamp = meta["surf_timestamp"]
+
+    # Formatieren des ETD-Timestamps falls nötig (z.B. 161959 -> 16-19-59)
+    if len(etd_stamp) == 6 and "-" not in etd_stamp:
+        etd_stamp = f"{etd_stamp[:2]}-{etd_stamp[2:4]}-{etd_stamp[4:]}"
+
+    csv_files = list((raw_base_dir / "surf_phantom").rglob(f"*{surf_stamp}.csv"))
+    json_files = list((raw_base_dir / "etds_scans").rglob(f"*{etd_stamp}.json"))
+    # Die Sphere-Detection-Datei heißt wie die Messdatei mit '_QA' und darf nicht als Messdatei
+    # eingesammelt werden.
+    csv_files = [c for c in csv_files if not c.name.endswith("_QA.csv")]
+
+    if not csv_files or not json_files:
+        print(f"   [!] FEHLT: Rohdaten für ID {m_id}. Überspringe.")
+        return None
+
+    out_dir = process_base_dir / couch_folder / measurement_folder_name(meta, target_linac, pad_folder_name, date_str)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    proc = ETDQAProcessor(terminal_version='legacy')
+    proc.load_csv(str(csv_files[0]))
+    proc.load_json(str(json_files[0]))
+
+    # 1. Signale abgleichen (Zeitskalierung anhand der Sync-Pulse)
+    proc.align_and_crop_signals(measurement_group=g_label,
+                                etds_timestamp=meta["etds_timestamp"],
+                                surf_timestamp=meta["surf_timestamp"])
+
+    # Sync-Zeitstempel in die Metadaten übernehmen - sie definieren das Messfenster und
+    # werden von numqa und der Sphere-Detection-Auswertung wiederverwendet.
+    meta_out = dict(meta)
+    meta_out["sync"] = proc.sync_info
+    meta_out["measurement_window_margin_sec"] = qa_metrics.DEFAULT_WINDOW_MARGIN_SEC
+    t_start, t_end = qa_metrics.measurement_window(proc.sync_info)
+    meta_out["measurement_window_sec"] = [t_start, t_end]
+    with open(out_dir / "metadata.json", "w") as f:
+        json.dump(meta_out, f, indent=4)
+
+    # Export 01 (Rohdaten nach Alignment / Vor Kinematik)
+    save_7d_array(proc.df_json, ETD_COLS, out_dir / "01_after_align_etd.csv")
+    save_7d_array(proc.df_csv, PHANTOM_COLS, out_dir / "01_after_align_phantom.csv")
+
+    # 2. Kinematische Transformation in klinische Koordinaten (erzeugt True_* Spalten)
+    proc.apply_kinematics(couch_angle=float(meta.get("couch_angle", 0.0)))
+
+    # Export 02 (Aligned + Kinematik angewendet)
+    save_7d_array(proc.df_json, ETD_COLS, out_dir / "02_aligned_kin_applied_etd.csv")
+    save_7d_array(proc.df_csv, PHANTOM_COLS, out_dir / "02_aligned_kin_applied_phantom.csv")
+
+    # Export 03 (RMSE über den gesamten Bereich - Übersicht, nicht die QA-Metrik)
+    calculate_and_save_rmse(proc.df_json, proc.df_csv, out_dir)
+
+    return {
+        'm_id': m_id,
+        'meta': meta_out,
+        'out_dir': out_dir,
+        'g_label': g_label,
+        'couch_folder': couch_folder,
+        'pad_folder': pad_folder_name,
+        'df_phantom': proc.df_csv,
+        'df_etd': proc.df_json,
+        'sync_info': proc.sync_info,
+        'surf_csv': str(csv_files[0]),
+        'window': (t_start, t_end),
+    }
+
+
+def run_processing(measurements, target_linac, raw_base_dir, process_base_dir, date_str):
+    """Verarbeitet alle ausgewählten Messungen und sammelt die Ergebnis-Records ein."""
+    records = []
+    for m_id, meta in measurements:
+        pad_folder_name = "32" if meta.get("heatingpads") == "32" else "RT"
+        g_label = group_label(meta, target_linac, pad_folder_name)
+        print(f"\n[{g_label}] ---> Starte Export & Alignment")
+        try:
+            rec = process_measurement(m_id, meta, target_linac, raw_base_dir, process_base_dir, date_str)
+            if rec is None:
+                continue
+            records.append(rec)
+            print(f"   ✅ ID {m_id} verarbeitet und in {rec['out_dir']} gespeichert.")
+        except Exception as e:
+            print(f"   [X] FEHLER bei ID {m_id}: {e}")
+    return records
+
+
+# ------------------------------------------
+# Modus: plotpaper (Publikationsplots, ein PDF je Messreihe)
+# ------------------------------------------
+def run_plotpaper(records, process_base_dir, date_str):
+    for rec in records:
+        g_label = rec['g_label']
+        print(f"\nGeneriere Paper-Plot für {g_label}...")
+
+        mean_df, std_df = bin_and_average([rec['df_etd']])
+        t_kin = mean_df['Time_Bin'].values
+        reference_csv_df = rec['df_phantom']
+
+        def get_interp(col):
+            csv_time = reference_csv_df['Time_Sec'].values - reference_csv_df['Time_Sec'].iloc[0]
+            arr = np.array([getattr(v, 'n', v) for v in reference_csv_df[col]])
+            return np.interp(t_kin, csv_time, arr)
+
+        # ETD-Werte über DOF_SPEC holen, damit die Vorzeichen-Konvention (invertierte
+        # ETD-Vertikalachse) identisch zu RMSE- und numqa-Auswertung ist.
+        def et_vals(dof_name):
+            return DOF_BY_NAME[dof_name].etd_sign * mean_df[DOF_BY_NAME[dof_name].etd_col].values
+
+        trans_et = {'X': et_vals('lateral'), 'Y': et_vals('longitudinal'), 'Z': et_vals('vertical')}
+        trans_ihd = {'X': get_interp('True_Lateral'), 'Y': get_interp('True_Longitudinal'),
+                     'Z': get_interp('True_Vertical')}
+        rot_et = {'pitch': et_vals('pitch'), 'yaw': et_vals('yaw'), 'roll': et_vals('roll')}
+        rot_ihd = {'pitch': get_interp('True_Pitch'), 'yaw': get_interp('True_Yaw'),
+                   'roll': get_interp('True_Roll')}
+
+        std_trans = {'X': std_df['lateral'].values, 'Y': std_df['longitudinal'].values,
+                     'Z': std_df['vertical'].values}
+        std_rot = {'pitch': std_df['pitch'].values, 'yaw': std_df['yaw'].values, 'roll': std_df['roll'].values}
+
+        rmse3d_vals = mean_df['rmse3d'].values if 'rmse3d' in mean_df.columns else np.zeros_like(t_kin)
+        rmse_temp_vals = mean_df['rmse_temp'].values if 'rmse_temp' in mean_df.columns else np.zeros_like(t_kin)
+
+        save_path = process_base_dir / rec['couch_folder'] / f"{g_label}_{date_str}_Plot.pdf"
+
+        res = plot_evaluation_results_interactive(
+            t_kin=t_kin, trans_et=trans_et, trans_ihd=trans_ihd, rot_et=rot_et, rot_ihd=rot_ihd,
+            std_trans=std_trans, std_rot=std_rot, t_rmse=t_kin, rmse3d=rmse3d_vals, rmse_temp=rmse_temp_vals,
+            save_path=save_path, group_name=g_label
+        )
+
+        if res == 'exit':
+            print("Abbruch durch Benutzer.")
+            return
+
+
+# ------------------------------------------
+# Modus: plotqa (QA-Übersicht, ein A4-PDF je Temperatursetting)
+# ------------------------------------------
+def run_plotqa(records, target_linac, process_base_dir, date_str):
+    """Ein PDF je (Pads x Couch-Winkel). Beide Deflections liegen in denselben Achsen.
+
+    Ausgewertet werden laut Absprache nur single-angle-Messreihen (die Couch-Serie ist laut
+    Messprotokoll für die jährliche QA nicht erforderlich).
+    """
+    qa_records = [r for r in records if r['meta'].get('meas_couch_type') == 'single angle']
+    skipped = len(records) - len(qa_records)
+    if skipped:
+        print(f"\n[i] plotqa: {skipped} multi-angle-Messung(en) übersprungen (nur single angle).")
+
+    if not qa_records:
+        print("Keine single-angle-Messungen für plotqa gefunden.")
         return
 
-    mode = sys.argv[1].lower()
+    groups = {}
+    for rec in qa_records:
+        key = (rec['pad_folder'], rec['meta'].get('couch_angle'))
+        groups.setdefault(key, []).append(rec)
+
+    for (pad_folder, couch_angle), recs in sorted(groups.items(), key=lambda kv: str(kv[0])):
+        recs = sorted(recs, key=lambda r: r['meta'].get('deflection', 0))
+        print(f"\nGeneriere QA-Übersicht für Pads={pad_folder}, Couch={couch_angle}...")
+
+        # Sphere-Detection-Tabelle aus der zugehörigen *_QA.csv (alle Deflections gemeinsam).
+        sd_table = None
+        try:
+            sd_path = sphere_detection.qa_csv_path_for(recs[0]['surf_csv'])
+            if os.path.exists(sd_path):
+                runs = [{'deflection': r['meta'].get('deflection'),
+                         'couch_angle': r['meta'].get('couch_angle', 0),
+                         'df_etd': r['df_etd'],
+                         't_eval': r['window'][1]} for r in recs]
+                sd_table = sphere_detection.build_sphere_detection_table(sd_path, runs)
+            else:
+                print(f"   [!] Keine Sphere-Detection-Datei gefunden: {sd_path}")
+        except Exception as e:
+            print(f"   [!] Sphere-Detection-Tabelle nicht erstellbar: {e}")
+
+        title = f"ETDS QA Overview - L{target_linac} | Pads {pad_folder} | Couch {couch_angle}deg"
+        save_path = process_base_dir / recs[0]['couch_folder'] / \
+            f"L{target_linac}_{pad_folder}_Couch{couch_angle}_{date_str}_QA.pdf"
+
+        plot_qa_overview(recs, sd_table=sd_table, title=title, save_path=save_path)
+        print(f"   [✓] QA-Übersicht gespeichert: {save_path}")
+
+
+# ------------------------------------------
+# Modus: numqa (numerische Auswertung im Messfenster)
+# ------------------------------------------
+def find_latest_measurement_dir(process_base_dir, couch_folder, g_label):
+    """Neuester Verarbeitungslauf einer Messreihe (Ordner '<g_label>_<datum>')."""
+    parent = process_base_dir / couch_folder
+    if not parent.exists():
+        return None
+    candidates = sorted([d for d in parent.iterdir() if d.is_dir() and d.name.startswith(g_label + "_")])
+    return candidates[-1] if candidates else None
+
+
+def run_numqa(measurements, target_linac, process_base_dir, date_str):
+    """Liest die exportierten 02-CSVs, berechnet die Metriken im Messfenster und aggregiert.
+
+    Setzt einen vorherigen Lauf von 'process'/'plotpaper'/'plotqa' voraus - dabei entstehen
+    die 02-CSVs und die Sync-Zeitstempel in der metadata.json.
+    """
+    qa_measurements = [(m, meta) for m, meta in measurements
+                       if meta.get('meas_couch_type') == 'single angle']
+    skipped = len(measurements) - len(qa_measurements)
+    if skipped:
+        print(f"[i] numqa: {skipped} multi-angle-Messung(en) übersprungen (nur single angle).")
+
+    if not qa_measurements:
+        print("Keine single-angle-Messungen für numqa gefunden.")
+        return
+
+    records = []
+    for m_id, meta in qa_measurements:
+        pad_folder_name = "32" if meta.get("heatingpads") == "32" else "RT"
+        g_label = group_label(meta, target_linac, pad_folder_name)
+        couch_folder = meas_couch_type_folder(meta)
+
+        meas_dir = find_latest_measurement_dir(process_base_dir, couch_folder, g_label)
+        if meas_dir is None:
+            print(f"   [X] ID {m_id} ({g_label}): kein Verarbeitungsordner gefunden. "
+                  f"Bitte zuerst 'process' oder 'plotqa' ausfuehren.")
+            continue
+
+        ph_path = meas_dir / "02_aligned_kin_applied_phantom.csv"
+        etd_path = meas_dir / "02_aligned_kin_applied_etd.csv"
+        meta_path = meas_dir / "metadata.json"
+
+        missing = [p.name for p in (ph_path, etd_path, meta_path) if not p.exists()]
+        if missing:
+            print(f"   [X] ID {m_id} ({g_label}): fehlende Datei(en) {missing} in {meas_dir}. "
+                  f"Bitte zuerst 'process' oder 'plotqa' ausfuehren.")
+            continue
+
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta_stored = json.load(f)
+
+        if not meta_stored.get("sync"):
+            print(f"   [X] ID {m_id} ({g_label}): metadata.json enthaelt keine Sync-Zeitstempel "
+                  f"(alter Verarbeitungslauf). Bitte 'process' erneut ausfuehren.")
+            continue
+
+        df_ph = pd.read_csv(ph_path, sep=';', decimal='.')
+        df_etd = pd.read_csv(etd_path, sep=';', decimal='.')
+
+        try:
+            window = qa_metrics.measurement_window(
+                meta_stored["sync"],
+                meta_stored.get("measurement_window_margin_sec", qa_metrics.DEFAULT_WINDOW_MARGIN_SEC))
+            metrics = qa_metrics.compute_dof_metrics(df_ph, df_etd, window)
+        except ValueError as e:
+            print(f"   [X] ID {m_id} ({g_label}): {e}")
+            continue
+
+        metrics.to_csv(meas_dir / "03_alldof_parameters.csv", index=False, sep=';', decimal='.')
+        records.append({'meta': meta_stored, 'metrics': metrics})
+        print(f"   ✅ ID {m_id} ({g_label}): Fenster {window[0]:.2f}-{window[1]:.2f}s, "
+              f"{int(metrics['N_Samples'].iloc[0])} Punkte -> 03_alldof_parameters.csv")
+
+    if not records:
+        print("\nKeine auswertbaren Messungen - keine Gesamttabelle erzeugt.")
+        return
+
+    table = qa_metrics.build_numqa_table(records)
+    out_path = process_base_dir / f"ETDS_L{target_linac}_numqa_{date_str}.csv"
+    table.to_csv(out_path, index=False, sep=';', decimal='.')
+    print(f"\n[✓] Gesamttabelle ({len(table)} Zeilen) gespeichert: {out_path}")
+
+
+def main():
+    if len(sys.argv) < 3:
+        print("Nutzung: python etds_qa_evaluation.py <funktion> <linac_id> [deflection: 1/2/all] [heatingpads: RT/32/all]")
+        print("  Funktionen:")
+        print("    process    - Alignment + Kinematik, schreibt 01/02/03-CSVs und metadata.json")
+        print("    plotpaper  - wie process, zusaetzlich interaktiver Publikationsplot je Messreihe")
+        print("    plotqa     - wie process, zusaetzlich QA-Uebersicht (A4) je Temperatursetting")
+        print("    numqa      - numerische Auswertung im Messfenster (setzt einen process-Lauf voraus)")
+        print("  Beispiel: python etds_qa_evaluation.py plotqa 1 all")
+        print("  Beispiel: python etds_qa_evaluation.py numqa 1")
+        return
+
+    raw_mode = sys.argv[1].lower()
+    mode = MODE_ALIASES.get(raw_mode, raw_mode)
+    if mode not in VALID_MODES:
+        print(f"Unbekannte Funktion '{sys.argv[1]}'. Erlaubt: {', '.join(VALID_MODES)}.")
+        return
+    if raw_mode in MODE_ALIASES:
+        print(f"[i] '{raw_mode}' ist ein Alias fuer '{mode}'.")
+
     target_linac = sys.argv[2]
 
-    # Pads übersetzen (RT in der Kommandozeile entspricht OFF im JSON)
-    target_pads_input = sys.argv[3].upper()
-    target_pads = "OFF" if target_pads_input == "RT" else target_pads_input
+    # Optionale Filter: fehlendes Argument oder "all" -> kein Filter (alles verarbeiten)
+    target_deflection_input = _parse_optional_filter(sys.argv, 3)
+    target_pads_input = _parse_optional_filter(sys.argv, 4)
 
-    # Pfade laden
     with open(CONFIG_JSON_PATH, "r", encoding="utf-8") as f:
         full_config = json.load(f)
 
-    # 1. Filtern und Gruppieren
-    # Gruppiert nach: (Group_Name, Pads)
-    groups = {}
-    for m_id, meta in full_config.items():
-        if meta.get("Linac") != target_linac: continue
-
-        # NEU: Wenn "ALL" übergeben wurde, ignorieren wir den Pad-Filter
-        if target_pads_input != "ALL" and meta.get("heatingpads") != target_pads:
-            continue
-
-        g_key = (meta.get("group"), meta.get("heatingpads"))
-        if g_key not in groups:
-            groups[g_key] = []
-
-        # Speichere die Messungs-ID und Metadaten für die Verarbeitung
-        groups[g_key].append((m_id, meta))
-
-    if not groups:
-        print(f"Keine passenden Messungen für Linac {target_linac} und Pads {target_pads_input} gefunden.")
+    measurements = select_measurements(full_config, target_linac,
+                                       target_deflection_input, target_pads_input)
+    if not measurements:
+        print(f"Keine passenden Messungen für Linac {target_linac} "
+              f"(deflection={target_deflection_input or 'all'}, heatingpads={target_pads_input or 'all'}) gefunden.")
         return
 
-    # Basis-Verzeichnisse für In- und Output
     raw_base_dir = Path(f"data/raw/L{target_linac}")
     process_base_dir = Path(f"data/process/L{target_linac}")
+    date_str = datetime.now().strftime("%Y-%m-%d")
 
-    for (group_name, pad_status), messungen in groups.items():
-        pad_folder_name = "32" if pad_status == "32" else "RT"
-        print(f"\n[{group_name.upper()} | Pads: {pad_folder_name}] ---> Starte Export & Alignment")
+    if mode == "numqa":
+        run_numqa(measurements, target_linac, process_base_dir, date_str)
+        return
 
-        all_json_dfs = []
-        reference_csv_df = None
+    records = run_processing(measurements, target_linac, raw_base_dir, process_base_dir, date_str)
+    if not records:
+        print("\nKeine Messung erfolgreich verarbeitet.")
+        return
 
-        for m_id, meta in messungen:
-            # Ordnerstruktur aufbauen (z.B. data/process/L1/32/mindev/meas_1)
-            out_dir = process_base_dir / pad_folder_name / group_name / f"meas_{str(m_id).zfill(2)}"
-            out_dir.mkdir(parents=True, exist_ok=True)
-
-            with open(out_dir / "metadata.json", "w") as f:
-                json.dump(meta, f, indent=4)
-
-            etd_stamp = meta["etds_timestamp"]
-            surf_stamp = meta["surf_timestamp"]
-
-            # Formatieren des ETD-Timestamps falls nötig (z.B. 161959 -> 16-19-59)
-            if len(etd_stamp) == 6 and "-" not in etd_stamp:
-                etd_stamp = f"{etd_stamp[:2]}-{etd_stamp[2:4]}-{etd_stamp[4:]}"
-
-            # Suche die passenden Rohdateien in den Subordnern
-            csv_files = list((raw_base_dir / "surf_phantom").rglob(f"*{surf_stamp}.csv"))
-            json_files = list((raw_base_dir / "etds_scans").rglob(f"*{etd_stamp}.json"))
-
-            if not csv_files or not json_files:
-                print(f"   [!] FEHLT: Rohdaten für ID {m_id}. Überspringe.")
-                continue
-
-            try:
-                proc = ETDQAProcessor(terminal_version='legacy')
-                proc.load_csv(str(csv_files[0]))
-                proc.load_json(str(json_files[0]))
-
-                # 1. Signale abgleichen (Zeitskalierung & Peak-Ermittlung auf Pos_H)
-                proc.align_and_crop_signals(measurement_group=group_name)
-
-                # Export 01 (Rohdaten nach Alignment / Vor Kinematik)
-                save_7d_array(proc.df_json, ETD_COLS, out_dir / "01_after_align_etd.csv")
-                save_7d_array(proc.df_csv, PHANTOM_COLS, out_dir / "01_after_align_phantom.csv")
-
-                # 2. Kinematische Transformation in klinische Koordinaten berechnen (erzeugt True_* Spalten)
-                c_angle = float(meta.get("couch_angle", 0.0))
-                proc.apply_kinematics(couch_angle=c_angle)
-
-                # Export 02 (Aligned + Kinematik angewendet)
-                save_7d_array(proc.df_json, ETD_COLS, out_dir / "02_aligned_kin_applied_etd.csv")
-                save_7d_array(proc.df_csv, PHANTOM_COLS, out_dir / "02_aligned_kin_applied_phantom.csv")
-
-                # Export 03 (RMSE)
-                calculate_and_save_rmse(proc.df_json, proc.df_csv, out_dir)
-
-                # Daten für Plotting im Arbeitsspeicher ablegen
-                all_json_dfs.append(proc.df_json)
-                if reference_csv_df is None:
-                    reference_csv_df = proc.df_csv
-
-                print(f"   ✅ ID {m_id} verarbeitet und in {out_dir} gespeichert.")
-            except Exception as e:
-                print(f"   [X] FEHLER bei ID {m_id}: {e}")
-
-        # Plot Generierung (Wenn --mode plot)
-        if mode == "plot" and all_json_dfs:
-            print(f"\nGeneriere Plot für {group_name}...")
-            mean_df, std_df = bin_and_average(all_json_dfs)
-            t_kin = mean_df['Time_Bin'].values
-
-            def get_interp(col):
-                csv_time = reference_csv_df['Time_Sec'].values - reference_csv_df['Time_Sec'].iloc[0]
-                arr = reference_csv_df[
-                    f'{col}_nominal'].values if f'{col}_nominal' in reference_csv_df.columns else np.array(
-                    [getattr(v, 'n', v) for v in reference_csv_df[col]])
-                return np.interp(t_kin, csv_time, arr)
-
-            trans_et = {'X': mean_df['lateral'].values, 'Y': mean_df['longitudinal'].values,
-                        'Z': -mean_df['vertical'].values}
-            trans_ihd = {'X': get_interp('True_Lateral'), 'Y': get_interp('True_Longitudinal'),
-                         'Z': get_interp('True_Vertical')}
-            rot_et = {'pitch': mean_df['pitch'].values, 'yaw': mean_df['yaw'].values, 'roll': mean_df['roll'].values}
-            rot_ihd = {'pitch': get_interp('True_Pitch'), 'yaw': get_interp('True_Yaw'),
-                       'roll': get_interp('True_Roll')}
-
-            std_trans = {'X': std_df['lateral'].values, 'Y': std_df['longitudinal'].values,
-                         'Z': std_df['vertical'].values}
-            std_rot = {'pitch': std_df['pitch'].values, 'yaw': std_df['yaw'].values, 'roll': std_df['roll'].values}
-
-            rmse3d_vals = mean_df['rmse3d'].values if 'rmse3d' in mean_df.columns else np.zeros_like(t_kin)
-            rmse_temp_vals = mean_df['rmse_temp'].values if 'rmse_temp' in mean_df.columns else np.zeros_like(t_kin)
-
-            plot_out_dir = process_base_dir / pad_folder_name / group_name
-            date_str = datetime.now().strftime("%Y-%m-%d")
-            save_path = plot_out_dir / f"{group_name}_Plot_{date_str}.pdf"
-
-            res = plot_evaluation_results_interactive(
-                t_kin=t_kin, trans_et=trans_et, trans_ihd=trans_ihd, rot_et=rot_et, rot_ihd=rot_ihd,
-                std_trans=std_trans, std_rot=std_rot, t_rmse=t_kin, rmse3d=rmse3d_vals, rmse_temp=rmse_temp_vals,
-                save_path=save_path, group_name=group_name
-            )
-
-            if res == 'exit':
-                print("Abbruch durch Benutzer.")
-                break
+    if mode == "plotpaper":
+        run_plotpaper(records, process_base_dir, date_str)
+    elif mode == "plotqa":
+        run_plotqa(records, target_linac, process_base_dir, date_str)
 
 
 if __name__ == "__main__":

@@ -128,5 +128,165 @@
             ],
             "active": false
         }
+    },
+    "mindev_couch0": {
+        "peak": {
+            "ax_idx": 0,
+            "xlim": [
+                17.400000000000002,
+                21.400000000000002
+            ],
+            "ylim": null,
+            "pos": [
+                0.05,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        },
+        "flat": {
+            "ax_idx": 0,
+            "xlim": [
+                0,
+                2.6
+            ],
+            "ylim": null,
+            "pos": [
+                0.6,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        }
+    },
+    "maxdev_couch0": {
+        "peak": {
+            "ax_idx": 0,
+            "xlim": [
+                29.6,
+                33.6
+            ],
+            "ylim": null,
+            "pos": [
+                0.05,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        },
+        "flat": {
+            "ax_idx": 0,
+            "xlim": [
+                0,
+                2.8
+            ],
+            "ylim": null,
+            "pos": [
+                0.6,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        }
+    },
+    "mindev_couch-90": {
+        "peak": {
+            "ax_idx": 0,
+            "xlim": [
+                17.400000000000002,
+                21.400000000000002
+            ],
+            "ylim": null,
+            "pos": [
+                0.05,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        },
+        "flat": {
+            "ax_idx": 0,
+            "xlim": [
+                0,
+                2.6
+            ],
+            "ylim": null,
+            "pos": [
+                0.6,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        }
+    },
+    "maxdev_couch-90": {
+        "peak": {
+            "ax_idx": 0,
+            "xlim": [
+                29.6,
+                33.6
+            ],
+            "ylim": null,
+            "pos": [
+                0.05,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        },
+        "flat": {
+            "ax_idx": 0,
+            "xlim": [
+                0,
+                2.8
+            ],
+            "ylim": null,
+            "pos": [
+                0.6,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        }
+    },
+    "L1_RT_Deflection1_Couch0": {
+        "peak": {
+            "ax_idx": 0,
+            "xlim": [
+                17.200000000000003,
+                21.200000000000003
+            ],
+            "ylim": null,
+            "pos": [
+                0.05,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        },
+        "flat": {
+            "ax_idx": 0,
+            "xlim": [
+                0,
+                2.6
+            ],
+            "ylim": null,
+            "pos": [
+                0.6,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        }
     }
 }
