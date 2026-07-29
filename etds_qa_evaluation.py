@@ -88,34 +88,19 @@ def calculate_and_save_rmse(df_etd, df_phantom, out_dir):
     return rmse_results
 
 
-def bin_and_average(data_frames, bin_ms=200):
-    bin_sec = bin_ms / 1000.0
-    aligned_frames = []
-
-    for df in data_frames:
-        df_align = df.copy()
-        t_start = df_align['Time_Sec'].iloc[0]
-        df_align['Time_Relative'] = df_align['Time_Sec'] - t_start
-        aligned_frames.append(df_align)
-
-    combined = pd.concat(aligned_frames, ignore_index=True)
-    combined['Time_Bin'] = np.round(combined['Time_Relative'] / bin_sec) * bin_sec
-
-    grouped = combined.groupby('Time_Bin')
-    mean_df = grouped.mean().reset_index()
-    std_df = grouped.std().reset_index().fillna(0)
-
-    return mean_df, std_df
-
-
 # ==========================================
 # INTERAKTIVE PLOT-ROUTINE
 # ==========================================
 def plot_evaluation_results_interactive(
-        t_kin, trans_et, trans_ihd, rot_et, rot_ihd,
-        std_trans, std_rot,
+        t_ihd, t_et, trans_et, trans_ihd, rot_et, rot_ihd,
         t_rmse, rmse3d, rmse_temp, save_path=None, group_name="Unbekannte Gruppe"
 ):
+    """Publikationsplot einer einzelnen Messung (ein ETD-Scan, keine Mittelung mehrerer
+
+    Läufe mehr) - daher getrennte Zeitachsen für Phantom (t_ihd) und ETD (t_et) statt eines
+    gemeinsamen Binning-Rasters, und keine Unsicherheits-/Fehlerbänder (die stellten früher
+    die Streuung zwischen mehreren gemittelten ETD-Läufen dar, die es hier nicht mehr gibt).
+    """
     C_X_PITCH = '#D55E00'
     C_Y_YAW = '#56B4E9'
     C_Z_ROLL = '#009E73'
@@ -129,7 +114,7 @@ def plot_evaluation_results_interactive(
     })
 
     movement_mag = np.abs(trans_ihd['X']) + np.abs(trans_ihd['Y']) + np.abs(trans_ihd['Z'])
-    t_peak = t_kin[np.argmax(movement_mag)]
+    t_peak = t_ihd[np.argmax(movement_mag)]
 
     window_size = max(1, int(len(movement_mag) / 20))
     min_var = float('inf')
@@ -139,7 +124,7 @@ def plot_evaluation_results_interactive(
         if var < min_var:
             min_var = var
             t_flat_idx = i + window_size // 2
-    t_flat = t_kin[t_flat_idx]
+    t_flat = t_ihd[t_flat_idx]
 
     window_sec = 4.0
 
@@ -183,38 +168,26 @@ def plot_evaluation_results_interactive(
         line_w = 1.2
 
         # Translation
-        axes[0].plot(t_kin, trans_ihd['X'], label='IHD X', color=C_X_PITCH, linestyle='--', linewidth=line_w)
-        axes[0].plot(t_kin, trans_ihd['Y'], label='IHD Y', color=C_Y_YAW, linestyle='--', linewidth=line_w)
-        axes[0].plot(t_kin, trans_ihd['Z'], label='IHD Z', color=C_Z_ROLL, linestyle='--', linewidth=line_w)
-        axes[0].plot(t_kin, trans_et['X'], label='ET X', color=C_X_PITCH, linestyle='-', linewidth=line_w)
-        axes[0].plot(t_kin, trans_et['Y'], label='ET Y', color=C_Y_YAW, linestyle='-', linewidth=line_w)
-        axes[0].plot(t_kin, trans_et['Z'], label='ET Z', color=C_Z_ROLL, linestyle='-', linewidth=line_w)
+        axes[0].plot(t_ihd, trans_ihd['X'], label='IHD X', color=C_X_PITCH, linestyle='--', linewidth=line_w)
+        axes[0].plot(t_ihd, trans_ihd['Y'], label='IHD Y', color=C_Y_YAW, linestyle='--', linewidth=line_w)
+        axes[0].plot(t_ihd, trans_ihd['Z'], label='IHD Z', color=C_Z_ROLL, linestyle='--', linewidth=line_w)
+        axes[0].plot(t_et, trans_et['X'], label='ET X', color=C_X_PITCH, linestyle='-', linewidth=line_w)
+        axes[0].plot(t_et, trans_et['Y'], label='ET Y', color=C_Y_YAW, linestyle='-', linewidth=line_w)
+        axes[0].plot(t_et, trans_et['Z'], label='ET Z', color=C_Z_ROLL, linestyle='-', linewidth=line_w)
         axes[0].set_ylabel('Translation [mm]')
         axes[0].legend(loc='upper right', ncol=1, fontsize=9)
         axes[0].grid(True, linestyle=':', alpha=0.6)
-        axes[0].fill_between(t_kin, trans_et['X'] - std_trans['X'], trans_et['X'] + std_trans['X'], color=C_X_PITCH,
-                             alpha=0.2, linewidth=0)
-        axes[0].fill_between(t_kin, trans_et['Y'] - std_trans['Y'], trans_et['Y'] + std_trans['Y'], color=C_Y_YAW,
-                             alpha=0.2, linewidth=0)
-        axes[0].fill_between(t_kin, trans_et['Z'] - std_trans['Z'], trans_et['Z'] + std_trans['Z'], color=C_Z_ROLL,
-                             alpha=0.2, linewidth=0)
 
         # Rotation
-        axes[1].plot(t_kin, rot_ihd['pitch'], label='IHD pitch', color=C_X_PITCH, linestyle='--', linewidth=line_w)
-        axes[1].plot(t_kin, rot_ihd['yaw'], label='IHD yaw', color=C_Y_YAW, linestyle='--', linewidth=line_w)
-        axes[1].plot(t_kin, rot_ihd['roll'], label='IHD roll', color=C_Z_ROLL, linestyle='--', linewidth=line_w)
-        axes[1].plot(t_kin, rot_et['pitch'], label='ET pitch', color=C_X_PITCH, linestyle='-', linewidth=line_w)
-        axes[1].plot(t_kin, rot_et['yaw'], label='ET yaw', color=C_Y_YAW, linestyle='-', linewidth=line_w)
-        axes[1].plot(t_kin, rot_et['roll'], label='ET roll', color=C_Z_ROLL, linestyle='-', linewidth=line_w)
+        axes[1].plot(t_ihd, rot_ihd['pitch'], label='IHD pitch', color=C_X_PITCH, linestyle='--', linewidth=line_w)
+        axes[1].plot(t_ihd, rot_ihd['yaw'], label='IHD yaw', color=C_Y_YAW, linestyle='--', linewidth=line_w)
+        axes[1].plot(t_ihd, rot_ihd['roll'], label='IHD roll', color=C_Z_ROLL, linestyle='--', linewidth=line_w)
+        axes[1].plot(t_et, rot_et['pitch'], label='ET pitch', color=C_X_PITCH, linestyle='-', linewidth=line_w)
+        axes[1].plot(t_et, rot_et['yaw'], label='ET yaw', color=C_Y_YAW, linestyle='-', linewidth=line_w)
+        axes[1].plot(t_et, rot_et['roll'], label='ET roll', color=C_Z_ROLL, linestyle='-', linewidth=line_w)
         axes[1].set_ylabel('Rotation [°]')
         axes[1].legend(loc='upper right', ncol=1, fontsize=9)
         axes[1].grid(True, linestyle=':', alpha=0.6)
-        axes[1].fill_between(t_kin, rot_et['pitch'] - std_rot['pitch'], rot_et['pitch'] + std_rot['pitch'],
-                             color=C_X_PITCH, alpha=0.2, linewidth=0)
-        axes[1].fill_between(t_kin, rot_et['yaw'] - std_rot['yaw'], rot_et['yaw'] + std_rot['yaw'], color=C_Y_YAW,
-                             alpha=0.2, linewidth=0)
-        axes[1].fill_between(t_kin, rot_et['roll'] - std_rot['roll'], rot_et['roll'] + std_rot['roll'], color=C_Z_ROLL,
-                             alpha=0.2, linewidth=0)
 
         current_ymin, current_ymax = axes[1].get_ylim()
         axes[1].set_ylim(min(current_ymin, -0.5), max(current_ymax, 0.5))
@@ -247,31 +220,19 @@ def plot_evaluation_results_interactive(
             axins.set_facecolor((1.0, 1.0, 1.0, 0.6))
 
             if ax_idx == 0:
-                axins.plot(t_kin, trans_ihd['X'], color=C_X_PITCH, linestyle='--')
-                axins.plot(t_kin, trans_ihd['Y'], color=C_Y_YAW, linestyle='--')
-                axins.plot(t_kin, trans_ihd['Z'], color=C_Z_ROLL, linestyle='--')
-                axins.plot(t_kin, trans_et['X'], color=C_X_PITCH)
-                axins.plot(t_kin, trans_et['Y'], color=C_Y_YAW)
-                axins.plot(t_kin, trans_et['Z'], color=C_Z_ROLL)
-                axins.fill_between(t_kin, trans_et['X'] - std_trans['X'], trans_et['X'] + std_trans['X'],
-                                   color=C_X_PITCH, alpha=0.2)
-                axins.fill_between(t_kin, trans_et['Y'] - std_trans['Y'], trans_et['Y'] + std_trans['Y'], color=C_Y_YAW,
-                                   alpha=0.2)
-                axins.fill_between(t_kin, trans_et['Z'] - std_trans['Z'], trans_et['Z'] + std_trans['Z'],
-                                   color=C_Z_ROLL, alpha=0.2)
+                axins.plot(t_ihd, trans_ihd['X'], color=C_X_PITCH, linestyle='--')
+                axins.plot(t_ihd, trans_ihd['Y'], color=C_Y_YAW, linestyle='--')
+                axins.plot(t_ihd, trans_ihd['Z'], color=C_Z_ROLL, linestyle='--')
+                axins.plot(t_et, trans_et['X'], color=C_X_PITCH)
+                axins.plot(t_et, trans_et['Y'], color=C_Y_YAW)
+                axins.plot(t_et, trans_et['Z'], color=C_Z_ROLL)
             elif ax_idx == 1:
-                axins.plot(t_kin, rot_ihd['pitch'], color=C_X_PITCH, linestyle='--')
-                axins.plot(t_kin, rot_ihd['yaw'], color=C_Y_YAW, linestyle='--')
-                axins.plot(t_kin, rot_ihd['roll'], color=C_Z_ROLL, linestyle='--')
-                axins.plot(t_kin, rot_et['pitch'], color=C_X_PITCH)
-                axins.plot(t_kin, rot_et['yaw'], color=C_Y_YAW)
-                axins.plot(t_kin, rot_et['roll'], color=C_Z_ROLL)
-                axins.fill_between(t_kin, rot_et['pitch'] - std_rot['pitch'], rot_et['pitch'] + std_rot['pitch'],
-                                   color=C_X_PITCH, alpha=0.2)
-                axins.fill_between(t_kin, rot_et['yaw'] - std_rot['yaw'], rot_et['yaw'] + std_rot['yaw'], color=C_Y_YAW,
-                                   alpha=0.2)
-                axins.fill_between(t_kin, rot_et['roll'] - std_rot['roll'], rot_et['roll'] + std_rot['roll'],
-                                   color=C_Z_ROLL, alpha=0.2)
+                axins.plot(t_ihd, rot_ihd['pitch'], color=C_X_PITCH, linestyle='--')
+                axins.plot(t_ihd, rot_ihd['yaw'], color=C_Y_YAW, linestyle='--')
+                axins.plot(t_ihd, rot_ihd['roll'], color=C_Z_ROLL, linestyle='--')
+                axins.plot(t_et, rot_et['pitch'], color=C_X_PITCH)
+                axins.plot(t_et, rot_et['yaw'], color=C_Y_YAW)
+                axins.plot(t_et, rot_et['roll'], color=C_Z_ROLL)
 
             axins.set_xlim(xlims)
             has_manual_ylim = False
@@ -285,14 +246,15 @@ def plot_evaluation_results_interactive(
                         pass
 
             if not has_manual_ylim:
-                mask = (t_kin >= xlims[0]) & (t_kin <= xlims[1])
-                if mask.any():
+                mask_ihd = (t_ihd >= xlims[0]) & (t_ihd <= xlims[1])
+                mask_et = (t_et >= xlims[0]) & (t_et <= xlims[1])
+                if mask_ihd.any() or mask_et.any():
                     if ax_idx == 0:
-                        y_vals = np.concatenate([trans_ihd['X'][mask], trans_ihd['Y'][mask], trans_ihd['Z'][mask],
-                                                 trans_et['X'][mask], trans_et['Y'][mask], trans_et['Z'][mask]])
+                        y_vals = np.concatenate([trans_ihd['X'][mask_ihd], trans_ihd['Y'][mask_ihd], trans_ihd['Z'][mask_ihd],
+                                                 trans_et['X'][mask_et], trans_et['Y'][mask_et], trans_et['Z'][mask_et]])
                     else:
-                        y_vals = np.concatenate([rot_ihd['pitch'][mask], rot_ihd['yaw'][mask], rot_ihd['roll'][mask],
-                                                 rot_et['pitch'][mask], rot_et['yaw'][mask], rot_et['roll'][mask]])
+                        y_vals = np.concatenate([rot_ihd['pitch'][mask_ihd], rot_ihd['yaw'][mask_ihd], rot_ihd['roll'][mask_ihd],
+                                                 rot_et['pitch'][mask_et], rot_et['yaw'][mask_et], rot_et['roll'][mask_et]])
                     ymin, ymax = y_vals.min(), y_vals.max()
                     margin = max(0.1, (ymax - ymin) * 0.15)
                     axins.set_ylim(ymin - margin, ymax + margin)
@@ -458,7 +420,27 @@ def select_measurements(full_config, target_linac, deflection_filter=None, pads_
     return selected
 
 
-def process_measurement(m_id, meta, target_linac, raw_base_dir, process_base_dir, date_str):
+def compute_pair_index(full_config, m_id):
+    """Position dieses Eintrags unter allen Einträgen mit derselben surf_timestamp (CSV-
+    Datei), sortiert nach numerischer Config-ID.
+
+    Mehrere ETD-Scans teilen sich oft dieselbe CSV-Aufnahme (z.B. Deflection 1+2 in einem
+    Durchlauf, oder bei der Couch-Serie sogar 4 Scans) - die CSV enthält dann entsprechend
+    viele Sync-Puls-Paare. Die Config-IDs geben die tatsächliche Fahrreihenfolge vor (per
+    Absprache), das ist robuster als ein Wall-Clock-Abgleich von etds_timestamp/surf_timestamp:
+    letzterer bricht, sobald ein Sync-Puls in CSV oder JSON falsch/fehlend erkannt wird (z.B.
+    weil eine schiefstehende Achse den Rücksprung-Puls auf mehrere ETD-Kanäle verteilt und er
+    dadurch nicht als eigenständiges, sauberes Ereignis auftaucht) - dann verschieben sich alle
+    nachfolgenden Zeit-Offsets und die Zuordnung wird falsch.
+    """
+    surf_stamp = full_config[m_id]["surf_timestamp"]
+    siblings = sorted(
+        (mid for mid, m in full_config.items() if m.get("surf_timestamp") == surf_stamp),
+        key=lambda mid: int(mid))
+    return siblings.index(m_id)
+
+
+def process_measurement(m_id, meta, target_linac, raw_base_dir, process_base_dir, date_str, full_config):
     """Verarbeitet eine einzelne Messung: Alignment, Kinematik, Export 01/02/03.
 
     Rückgabe: record-dict mit den ausgerichteten DataFrames und dem Sync-Zeitstempel-Block,
@@ -492,10 +474,10 @@ def process_measurement(m_id, meta, target_linac, raw_base_dir, process_base_dir
     proc.load_csv(str(csv_files[0]))
     proc.load_json(str(json_files[0]))
 
-    # 1. Signale abgleichen (Zeitskalierung anhand der Sync-Pulse)
+    # 1. Signale abgleichen (Zeitskalierung anhand der Sync-Pulse + Feinjustierung)
     proc.align_and_crop_signals(measurement_group=g_label,
-                                etds_timestamp=meta["etds_timestamp"],
-                                surf_timestamp=meta["surf_timestamp"])
+                                pair_idx=compute_pair_index(full_config, m_id),
+                                couch_angle=float(meta.get("couch_angle", 0.0)))
 
     # Sync-Zeitstempel in die Metadaten übernehmen - sie definieren das Messfenster und
     # werden von numqa und der Sphere-Detection-Auswertung wiederverwendet.
@@ -536,15 +518,20 @@ def process_measurement(m_id, meta, target_linac, raw_base_dir, process_base_dir
     }
 
 
-def run_processing(measurements, target_linac, raw_base_dir, process_base_dir, date_str):
-    """Verarbeitet alle ausgewählten Messungen und sammelt die Ergebnis-Records ein."""
+def run_processing(measurements, target_linac, raw_base_dir, process_base_dir, date_str, full_config):
+    """Verarbeitet alle ausgewählten Messungen und sammelt die Ergebnis-Records ein.
+
+    full_config (ungefiltert!) wird für compute_pair_index gebraucht: die Paar-Zuordnung muss
+    auch dann korrekt bleiben, wenn measurements durch einen Deflection-/Pad-Filter nur einen
+    Teil der Geschwister-Einträge enthält.
+    """
     records = []
     for m_id, meta in measurements:
         pad_folder_name = "32" if meta.get("heatingpads") == "32" else "RT"
         g_label = group_label(meta, target_linac, pad_folder_name)
         print(f"\n[{g_label}] ---> Starte Export & Alignment")
         try:
-            rec = process_measurement(m_id, meta, target_linac, raw_base_dir, process_base_dir, date_str)
+            rec = process_measurement(m_id, meta, target_linac, raw_base_dir, process_base_dir, date_str, full_config)
             if rec is None:
                 continue
             records.append(rec)
@@ -558,43 +545,41 @@ def run_processing(measurements, target_linac, raw_base_dir, process_base_dir, d
 # Modus: plotpaper (Publikationsplots, ein PDF je Messreihe)
 # ------------------------------------------
 def run_plotpaper(records, process_base_dir, date_str):
+    """Publikationsplot je Messreihe. Jede Messreihe ist genau ein ETD-Scan (kein Mitteln
+    mehrerer Läufe mehr), Phantom- und ETD-Kurve werden direkt auf ihrer eigenen, bereits
+    ausgerichteten Zeitachse geplottet - kein gemeinsames Binning-Raster nötig."""
     for rec in records:
         g_label = rec['g_label']
         print(f"\nGeneriere Paper-Plot für {g_label}...")
 
-        mean_df, std_df = bin_and_average([rec['df_etd']])
-        t_kin = mean_df['Time_Bin'].values
-        reference_csv_df = rec['df_phantom']
+        df_ihd = rec['df_phantom']
+        df_et = rec['df_etd']
+        t_ihd = df_ihd['Time_Sec'].values - df_ihd['Time_Sec'].iloc[0]
+        t_et = df_et['Time_Sec'].values - df_ihd['Time_Sec'].iloc[0]
 
-        def get_interp(col):
-            csv_time = reference_csv_df['Time_Sec'].values - reference_csv_df['Time_Sec'].iloc[0]
-            arr = np.array([getattr(v, 'n', v) for v in reference_csv_df[col]])
-            return np.interp(t_kin, csv_time, arr)
+        def ihd_vals(col):
+            return np.array([getattr(v, 'n', v) for v in df_ihd[col]])
 
         # ETD-Werte über DOF_SPEC holen, damit die Vorzeichen-Konvention (invertierte
         # ETD-Vertikalachse) identisch zu RMSE- und numqa-Auswertung ist.
         def et_vals(dof_name):
-            return DOF_BY_NAME[dof_name].etd_sign * mean_df[DOF_BY_NAME[dof_name].etd_col].values
+            return DOF_BY_NAME[dof_name].etd_sign * df_et[DOF_BY_NAME[dof_name].etd_col].values
 
         trans_et = {'X': et_vals('lateral'), 'Y': et_vals('longitudinal'), 'Z': et_vals('vertical')}
-        trans_ihd = {'X': get_interp('True_Lateral'), 'Y': get_interp('True_Longitudinal'),
-                     'Z': get_interp('True_Vertical')}
+        trans_ihd = {'X': ihd_vals('True_Lateral'), 'Y': ihd_vals('True_Longitudinal'),
+                     'Z': ihd_vals('True_Vertical')}
         rot_et = {'pitch': et_vals('pitch'), 'yaw': et_vals('yaw'), 'roll': et_vals('roll')}
-        rot_ihd = {'pitch': get_interp('True_Pitch'), 'yaw': get_interp('True_Yaw'),
-                   'roll': get_interp('True_Roll')}
+        rot_ihd = {'pitch': ihd_vals('True_Pitch'), 'yaw': ihd_vals('True_Yaw'),
+                   'roll': ihd_vals('True_Roll')}
 
-        std_trans = {'X': std_df['lateral'].values, 'Y': std_df['longitudinal'].values,
-                     'Z': std_df['vertical'].values}
-        std_rot = {'pitch': std_df['pitch'].values, 'yaw': std_df['yaw'].values, 'roll': std_df['roll'].values}
-
-        rmse3d_vals = mean_df['rmse3d'].values if 'rmse3d' in mean_df.columns else np.zeros_like(t_kin)
-        rmse_temp_vals = mean_df['rmse_temp'].values if 'rmse_temp' in mean_df.columns else np.zeros_like(t_kin)
+        rmse3d_vals = df_et['rmse3d'].values if 'rmse3d' in df_et.columns else np.zeros_like(t_et)
+        rmse_temp_vals = df_et['rmse_temp'].values if 'rmse_temp' in df_et.columns else np.zeros_like(t_et)
 
         save_path = process_base_dir / rec['couch_folder'] / f"{g_label}_{date_str}_Plot.pdf"
 
         res = plot_evaluation_results_interactive(
-            t_kin=t_kin, trans_et=trans_et, trans_ihd=trans_ihd, rot_et=rot_et, rot_ihd=rot_ihd,
-            std_trans=std_trans, std_rot=std_rot, t_rmse=t_kin, rmse3d=rmse3d_vals, rmse_temp=rmse_temp_vals,
+            t_ihd=t_ihd, t_et=t_et, trans_et=trans_et, trans_ihd=trans_ihd, rot_et=rot_et, rot_ihd=rot_ihd,
+            t_rmse=t_et, rmse3d=rmse3d_vals, rmse_temp=rmse_temp_vals,
             save_path=save_path, group_name=g_label
         )
 
@@ -629,6 +614,17 @@ def run_plotqa(records, target_linac, process_base_dir, date_str):
     for (pad_folder, couch_angle), recs in sorted(groups.items(), key=lambda kv: str(kv[0])):
         recs = sorted(recs, key=lambda r: r['meta'].get('deflection', 0))
         print(f"\nGeneriere QA-Übersicht für Pads={pad_folder}, Couch={couch_angle}...")
+
+        # AE-Zeitreihe (Pass/Watch/Act) je Messung berechnen und exportieren - Basis für die
+        # Toleranzbaender/rot markierten Zeitfenster im Plot und (separat) für numqa.
+        for r in recs:
+            try:
+                ae_df = qa_metrics.compute_ae_time_series(r['df_phantom'], r['df_etd'], r['window'])
+                ae_df.to_csv(r['out_dir'] / "03_alldof_ae_time.csv", index=False, sep=';', decimal='.')
+                r['ae_time'] = ae_df
+            except ValueError as e:
+                print(f"   [!] AE-Zeitreihe nicht berechenbar für {r['g_label']}: {e}")
+                r['ae_time'] = None
 
         # Sphere-Detection-Tabelle aus der zugehörigen *_QA.csv (alle Deflections gemeinsam).
         sd_table = None
@@ -682,6 +678,8 @@ def run_numqa(measurements, target_linac, process_base_dir, date_str):
         return
 
     records = []
+    rate_records = []
+    ae_time_dfs = []
     for m_id, meta in qa_measurements:
         pad_folder_name = "32" if meta.get("heatingpads") == "32" else "RT"
         g_label = group_label(meta, target_linac, pad_folder_name)
@@ -719,14 +717,22 @@ def run_numqa(measurements, target_linac, process_base_dir, date_str):
                 meta_stored["sync"],
                 meta_stored.get("measurement_window_margin_sec", qa_metrics.DEFAULT_WINDOW_MARGIN_SEC))
             metrics = qa_metrics.compute_dof_metrics(df_ph, df_etd, window)
+            # Self-contained (numqa setzt kein plotqa voraus): AE-Zeitreihe hier selbst neu
+            # berechnen statt sich auf eine evtl. vorhandene 03_alldof_ae_time.csv zu verlassen.
+            ae_df = qa_metrics.compute_ae_time_series(df_ph, df_etd, window)
         except ValueError as e:
             print(f"   [X] ID {m_id} ({g_label}): {e}")
             continue
 
         metrics.to_csv(meas_dir / "03_alldof_parameters.csv", index=False, sep=';', decimal='.')
+        ae_df.to_csv(meas_dir / "03_alldof_ae_time.csv", index=False, sep=';', decimal='.')
+        rates = qa_metrics.compute_pass_watch_rates(ae_df)
+
         records.append({'meta': meta_stored, 'metrics': metrics})
+        rate_records.append({'meta': meta_stored, 'rates': rates})
+        ae_time_dfs.append(ae_df)
         print(f"   ✅ ID {m_id} ({g_label}): Fenster {window[0]:.2f}-{window[1]:.2f}s, "
-              f"{int(metrics['N_Samples'].iloc[0])} Punkte -> 03_alldof_parameters.csv")
+              f"{int(metrics['N_Samples'].iloc[0])} Punkte -> 03_alldof_parameters.csv + 03_alldof_ae_time.csv")
 
     if not records:
         print("\nKeine auswertbaren Messungen - keine Gesamttabelle erzeugt.")
@@ -736,6 +742,19 @@ def run_numqa(measurements, target_linac, process_base_dir, date_str):
     out_path = process_base_dir / f"ETDS_L{target_linac}_numqa_{date_str}.csv"
     table.to_csv(out_path, index=False, sep=';', decimal='.')
     print(f"\n[✓] Gesamttabelle ({len(table)} Zeilen) gespeichert: {out_path}")
+
+    rate_table = qa_metrics.build_passrate_table(rate_records)
+    rate_path = process_base_dir / f"ETDS_L{target_linac}_passrate_{date_str}.csv"
+    rate_table.to_csv(rate_path, index=False, sep=';', decimal='.')
+    print(f"[✓] Passraten-Tabelle ({len(rate_table)} Zeilen) gespeichert: {rate_path}")
+
+    # Gesamt-Passrate je DoF, über alle Deflection/Pad-Kombinationen gepoolt (Rohpunkte
+    # zusammengezählt, nicht die Prozentsätze der Einzelmessungen gemittelt - siehe
+    # qa_metrics.pool_ae_time_series).
+    summary_table = qa_metrics.pool_ae_time_series(ae_time_dfs)
+    summary_path = process_base_dir / f"ETDS_L{target_linac}_passrate_summary_{date_str}.csv"
+    summary_table.to_csv(summary_path, index=False, sep=';', decimal='.')
+    print(f"[✓] Passraten-Summary ({len(summary_table)} Zeilen) gespeichert: {summary_path}")
 
 
 def main():
@@ -782,7 +801,7 @@ def main():
         run_numqa(measurements, target_linac, process_base_dir, date_str)
         return
 
-    records = run_processing(measurements, target_linac, raw_base_dir, process_base_dir, date_str)
+    records = run_processing(measurements, target_linac, raw_base_dir, process_base_dir, date_str, full_config)
     if not records:
         print("\nKeine Messung erfolgreich verarbeitet.")
         return

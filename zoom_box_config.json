@@ -288,5 +288,165 @@
             ],
             "active": false
         }
+    },
+    "L1_RT_Deflection2_Couch0": {
+        "peak": {
+            "ax_idx": 0,
+            "xlim": [
+                29.6,
+                33.6
+            ],
+            "ylim": null,
+            "pos": [
+                0.05,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        },
+        "flat": {
+            "ax_idx": 0,
+            "xlim": [
+                0,
+                2.8
+            ],
+            "ylim": null,
+            "pos": [
+                0.6,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        }
+    },
+    "L1_32_Deflection1_Couch0": {
+        "peak": {
+            "ax_idx": 0,
+            "xlim": [
+                17.400000000000002,
+                21.400000000000002
+            ],
+            "ylim": null,
+            "pos": [
+                0.05,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        },
+        "flat": {
+            "ax_idx": 0,
+            "xlim": [
+                0,
+                2.6
+            ],
+            "ylim": null,
+            "pos": [
+                0.6,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        }
+    },
+    "L1_32_Deflection2_Couch0": {
+        "peak": {
+            "ax_idx": 0,
+            "xlim": [
+                29.8,
+                33.8
+            ],
+            "ylim": null,
+            "pos": [
+                0.05,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        },
+        "flat": {
+            "ax_idx": 0,
+            "xlim": [
+                0,
+                2.8
+            ],
+            "ylim": null,
+            "pos": [
+                0.6,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        }
+    },
+    "L1_32_Deflection1_Couch-90": {
+        "peak": {
+            "ax_idx": 0,
+            "xlim": [
+                19.6,
+                23.6
+            ],
+            "ylim": null,
+            "pos": [
+                0.05,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        },
+        "flat": {
+            "ax_idx": 0,
+            "xlim": [
+                0,
+                2.6
+            ],
+            "ylim": null,
+            "pos": [
+                0.6,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        }
+    },
+    "L1_32_Deflection2_Couch-90": {
+        "peak": {
+            "ax_idx": 0,
+            "xlim": [
+                29.6,
+                33.6
+            ],
+            "ylim": null,
+            "pos": [
+                0.05,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        },
+        "flat": {
+            "ax_idx": 0,
+            "xlim": [
+                0,
+                2.8
+            ],
+            "ylim": null,
+            "pos": [
+                0.6,
+                0.6,
+                0.25,
+                0.35
+            ],
+            "active": false
+        }
     }
 }

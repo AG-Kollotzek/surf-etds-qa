@@ -24,6 +24,12 @@ import pandas as pd
 # Vorlaufzeit nach dem ersten bzw. vor dem letzten Sync-Puls, die nicht mitgewertet wird.
 DEFAULT_WINDOW_MARGIN_SEC = 3.0
 
+# Toleranzschwellen fuer die Pass/Watch/Act-Klassifikation des absoluten Fehlers je Sample.
+# |AE| <= ACCEPT: pass (gruen). ACCEPT < |AE| <= WATCH: watch (gelb). |AE| > WATCH: act (rot).
+# Einheit ist die des jeweiligen DoF (mm fuer Translation, Grad fuer Rotation).
+TOLERANCE_ACCEPT = 1.0
+TOLERANCE_WATCH = 2.0
+
 
 class DofSpec:
     """Zuordnung eines Freiheitsgrads zwischen Phantom- und ETD-Datensatz.
@@ -143,6 +149,168 @@ def compute_dof_metrics(df_phantom, df_etd, window, dofs=None):
         })
 
     return pd.DataFrame(rows)
+
+
+def classify_ae(ae_values, accept=TOLERANCE_ACCEPT, watch=TOLERANCE_WATCH):
+    """Pass/Watch/Act je Sample, anhand des absoluten Fehlers (elementweise)."""
+    ae = np.asarray(ae_values, dtype=float)
+    return np.where(ae <= accept, 'pass', np.where(ae <= watch, 'watch', 'act'))
+
+
+def compute_ae_time_series(df_phantom, df_etd, window, dofs=None):
+    """Absoluter Fehler |Ist(ETD) - Soll(Phantom)| je DoF und Zeitpunkt, nur im Messfenster.
+
+    Selbe Interpolationslogik wie compute_dof_metrics (ETD auf die Phantom-Stuetzstellen
+    interpoliert), nur dass hier jeder einzelne Zeitpunkt statt einer Kennzahl behalten wird -
+    Basis fuer die Toleranzbaender/rot markierten Zeitfenster im plotqa-Plot und fuer die
+    Pass/Watch-Raten. Wird als 03_alldof_ae_time.csv exportiert.
+
+    Rueckgabe: DataFrame mit Time_Sec, AE_<dof> (Betrag) und State_<dof> (pass/watch/act).
+    """
+    dofs = dofs or DOF_SPEC
+    t_start, t_end = window
+
+    t_ph = df_phantom['Time_Sec'].values
+    mask = (t_ph >= t_start) & (t_ph <= t_end)
+    if not mask.any():
+        raise ValueError(f"Keine Phantom-Messpunkte im Fenster [{t_start:.2f}, {t_end:.2f}]s.")
+
+    t_eval = t_ph[mask]
+    t_etd = df_etd['Time_Sec'].values
+
+    out = {'Time_Sec': t_eval}
+    for dof in dofs:
+        if dof.phantom_col not in df_phantom.columns or dof.etd_col not in df_etd.columns:
+            continue
+        soll = df_phantom[dof.phantom_col].values[mask]
+        ist = np.interp(t_eval, t_etd, dof.etd_values(df_etd))
+        ae = np.abs(ist - soll)
+        out[f'AE_{dof.name}'] = ae
+        out[f'State_{dof.name}'] = classify_ae(ae)
+
+    return pd.DataFrame(out)
+
+
+def find_out_of_tolerance_intervals(ae_time_df, dof_name, state='act'):
+    """Zusammenhängende Zeitintervalle [(t_start, t_end), ...], in denen State_<dof>==state ist.
+
+    Wird genutzt, um die rot markierten Zeitbereiche im plotqa-Plot zu bestimmen.
+    """
+    col = f'State_{dof_name}'
+    if ae_time_df is None or col not in ae_time_df.columns or ae_time_df.empty:
+        return []
+
+    t = ae_time_df['Time_Sec'].values
+    is_state = (ae_time_df[col].values == state)
+    if not is_state.any():
+        return []
+
+    edges = np.diff(is_state.astype(int), prepend=0, append=0)
+    starts = np.where(edges == 1)[0]
+    ends = np.where(edges == -1)[0] - 1
+
+    intervals = []
+    for s, e in zip(starts, ends):
+        e = min(e, len(t) - 1)
+        intervals.append((float(t[s]), float(t[e])))
+    return intervals
+
+
+def compute_pass_watch_rates(ae_time_df, dofs=None):
+    """Pass-/Watch-/Act-Rate (%) je DoF, aus einer compute_ae_time_series-Tabelle."""
+    dofs = dofs or DOF_SPEC
+    rows = []
+    for dof in dofs:
+        state_col = f'State_{dof.name}'
+        if state_col not in ae_time_df.columns:
+            continue
+        states = ae_time_df[state_col].values
+        n = len(states)
+        if n == 0:
+            continue
+        rows.append({
+            'DoF': dof.name,
+            'Unit': dof.unit,
+            'PassRate_AE': 100.0 * np.sum(states == 'pass') / n,
+            'WatchRate_AE': 100.0 * np.sum(states == 'watch') / n,
+            'ActRate_AE': 100.0 * np.sum(states == 'act') / n,
+            'N_Samples': n,
+        })
+    return pd.DataFrame(rows)
+
+
+def build_passrate_table(records):
+    """Fuehrt die Pass/Watch-Raten aller Messungen zu einer Linac-Tabelle zusammen.
+
+    records: Liste von dicts mit 'meta' (metadata.json-Inhalt) und 'rates'
+             (DataFrame aus compute_pass_watch_rates). Gleicher Aufbau/Sortierung wie
+             build_numqa_table, nur mit den Raten-Spalten statt MAE/RMSE/MaxAE.
+    """
+    rows = []
+    for rec in records:
+        meta = rec['meta']
+        pads = meta.get('heatingpads')
+        for _, r in rec['rates'].iterrows():
+            rows.append({
+                'DoF': r['DoF'],
+                'Unit': r['Unit'],
+                'Deflection': meta.get('deflection'),
+                'Pad_Temperature': 'RT' if pads == 'OFF' else f"{pads}C",
+                'Meas_Couch_Type': meta.get('meas_couch_type'),
+                'Couch_Angle': meta.get('couch_angle'),
+                'PassRate_AE': r['PassRate_AE'],
+                'WatchRate_AE': r['WatchRate_AE'],
+                'ActRate_AE': r['ActRate_AE'],
+                'N_Samples': r['N_Samples'],
+            })
+
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+
+    dof_order = {d.name: i for i, d in enumerate(DOF_SPEC)}
+    df['_dof_order'] = df['DoF'].map(dof_order)
+    df = df.sort_values(['_dof_order', 'Pad_Temperature', 'Deflection']).drop(columns='_dof_order')
+    return df.reset_index(drop=True)
+
+
+def pool_ae_time_series(ae_time_dfs, dofs=None):
+    """Gesamt-Passrate je DoF, gepoolt über mehrere AE-Zeitreihen (z.B. alle Deflection/Pad-
+    Kombinationen eines Linacs).
+
+    Wichtig: hier werden die ROHEN Pass/Watch/Act-Punkte aus allen Messungen zusammengezählt,
+    nicht die bereits pro Messung berechneten Prozentsätze gemittelt. Ein Mittelwert über
+    Prozentsätze würde jede Messung gleich gewichten, unabhängig von ihrer Punktzahl (z.B.
+    85 vs. 199 Samples) - das Pooling der Rohpunkte gewichtet automatisch korrekt nach
+    Stichprobengröße.
+    """
+    dofs = dofs or DOF_SPEC
+    rows = []
+    for dof in dofs:
+        state_col = f'State_{dof.name}'
+        all_states = np.concatenate([df[state_col].values for df in ae_time_dfs if state_col in df.columns])
+        if len(all_states) == 0:
+            continue
+        n = len(all_states)
+        rows.append({
+            'DoF': dof.name,
+            'Unit': dof.unit,
+            'N_Total': n,
+            'N_Pass': int(np.sum(all_states == 'pass')),
+            'N_Watch': int(np.sum(all_states == 'watch')),
+            'N_Act': int(np.sum(all_states == 'act')),
+            'PassRate_AE': 100.0 * np.sum(all_states == 'pass') / n,
+            'WatchRate_AE': 100.0 * np.sum(all_states == 'watch') / n,
+            'ActRate_AE': 100.0 * np.sum(all_states == 'act') / n,
+        })
+
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    dof_order = {d.name: i for i, d in enumerate(DOF_SPEC)}
+    df['_dof_order'] = df['DoF'].map(dof_order)
+    df = df.sort_values('_dof_order').drop(columns='_dof_order')
+    return df.reset_index(drop=True)
 
 
 def build_numqa_table(records):

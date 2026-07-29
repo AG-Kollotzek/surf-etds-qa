@@ -53,14 +53,14 @@ class SurfKinematics:
         ERR = 0.2  # Standardfehler bei Schublehre
         # Hebel der H-Achse
         self.hAxis_horizontal = ufloat(24.25, 0.5) + ufloat(147.4, ERR) + ufloat(9.2, ERR) + ufloat(14.5, 0.5)
-        self.hAxis_vertical = ufloat(14.5, 0.5) + ufloat(20, ERR) + ufloat(10, ERR) + ufloat(0.5, ERR)
+        self.hAxis_vertical = ufloat(14, 0.5) + ufloat(20, ERR) + ufloat(10, ERR) + ufloat(0.5, ERR)
         self.hAxis_diagonal = unp.sqrt(self.hAxis_horizontal ** 2 + self.hAxis_vertical ** 2)
 
         # Distanzen Phantom zu H-Schlitten in Home-Position
         rotatationTable_height = ufloat(130, ERR)
         phantomCenterDistance = ufloat(75, ERR)
-        phantomToTableDistance = ufloat(21, 1)  # Nachmessen!
-        self.sliderShift = ufloat(30, ERR) + ufloat(16, ERR)
+        phantomToTableDistance = ufloat(21, 1) + ufloat(1, ERR) # Nachmessen, passt !
+        self.sliderShift = ufloat(46, ERR)
         self.radius = rotatationTable_height + phantomToTableDistance + phantomCenterDistance + self.sliderShift + self.hAxis_vertical
 
         # Standard-Fehler der Achsen und Couch
