@@ -1,0 +1,6 @@
+# Vorjahreswerte fuer die Tabelle "Maximum error metrics compared with previous years".
+# Wird von create_report.py gelesen; die Zeile des aktuellen Jahres haengt das Skript
+# automatisch aus der laufenden Auswertung an.
+# Format (';'-getrennt, Einheit mit angeben), Zeilen mit '#' werden ignoriert:
+#   2025;0.512 mm;0.640 mm;1.201 mm
+Year;Max_MAE;Max_RMSE;Max_AbsError

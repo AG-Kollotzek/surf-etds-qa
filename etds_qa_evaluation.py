@@ -641,7 +641,7 @@ def run_plotqa(records, target_linac, process_base_dir, date_str):
         except Exception as e:
             print(f"   [!] Sphere-Detection-Tabelle nicht erstellbar: {e}")
 
-        title = f"ETDS QA Overview - L{target_linac} | Pads {pad_folder} | Couch {couch_angle}deg"
+        title = f"ETDS QA Overview - L{target_linac} | Pads {pad_folder}°C | Couch {couch_angle}deg"
         save_path = process_base_dir / recs[0]['couch_folder'] / \
             f"L{target_linac}_{pad_folder}_Couch{couch_angle}_{date_str}_QA.pdf"
 

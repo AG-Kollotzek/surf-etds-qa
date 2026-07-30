@@ -1,0 +1,55 @@
+% ================= SEITE 2: Passraten je Messung =================
+\ReportHeader{QA Report Details}
+
+\SectionBar{Description }
+<<DESCRIPTION>>
+\vspace{4mm}
+
+%------------------passrate detailed-----------------------------
+\SectionBar{Passrates for all measurments}
+\begin{tabularx}{\linewidth}{@{}X X l r r r l@{}}
+\toprule
+\textbf{DOF} & \textbf{Deflection} & \textbf{Temp.} & \textbf{pass [\%]} & \textbf{watch [\%]} & \textbf{action [\%]} & \textbf{result} \\
+\midrule
+<<TABLE_PASSRATE_DETAIL>>
+\bottomrule
+\end{tabularx}
+\clearpage
+
+% ================= SEITE 3: Numerische Fehler =================
+\ReportHeader{QA Report Details}
+
+\SectionBar{Error Metrics}
+\begin{minipage}[t]{\linewidth}
+\begin{tabularx}{\linewidth}{@{}X X X X X X r@{}}
+\toprule
+\textbf{DOF} & \textbf{Unit} & \textbf{Deflection} & \textbf{Temp.} & \textbf{MAE} & \textbf{RMSE} & \textbf{Max Error} \\
+\midrule
+<<TABLE_ERROR_METRICS>>
+\bottomrule
+\end{tabularx}
+\end{minipage}
+
+%-------------------maximum error metrics compared with previous years ------------------
+\vspace{4mm}
+
+\SectionBar{Maximum error metrics compared with previous years }
+\begin{tabularx}{\linewidth}{@{}l *{3}{>{\centering\arraybackslash}X}@{}}
+\toprule
+\textbf{Year} &
+\textbf{Max. MAE} &
+\textbf{Max. RMSE} &
+\textbf{Max. Absolute Error} \\
+\midrule
+<<TABLE_HISTORY>>
+\bottomrule
+\end{tabularx}
+\vspace{5mm}
+
+\noindent
+\textbf{Abbrevations:} \\
+DOF = degree of freedom \\
+MAE = mean average error \\
+RMSE = root mean square error \\
+
+\clearpage

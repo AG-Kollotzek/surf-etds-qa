@@ -1,0 +1,99 @@
+% ================= SEITE 1: Overview =================
+\ReportHeader{ETDS QA Report YEARLY}
+
+% --- QA Details ---
+\noindent
+\SectionBar{QA Details}
+\begin{tabularx}{\linewidth}{@{}l X l >{\raggedleft\arraybackslash}X@{}}
+\textcolor{extdlabel}{Tested by} & \ReportAuthor & & \\
+\textcolor{extdlabel}{Phantom}   & \Phantom      & \textcolor{extdlabel}{Linac} & \Linac \\
+\textcolor{extdlabel}{Date}      & \ReportDate   & \textcolor{extdlabel}{Time}  & \ReportTime \\
+\end{tabularx}
+
+\vspace{4mm}
+
+% -------------------------- Ampel-Box + Passraten ------------------------------------------
+\SectionBar{Passrates for all 6 DOF}
+\noindent
+\begin{minipage}[t]{0.2\linewidth}
+\centering
+\colorbox{<<VERDICT_COLOR>>}{%
+  \begin{minipage}{\linewidth}
+    \centering
+    \small \ReportDate \quad <<MAX_ABS_ERROR>>\\[1mm]
+    {\bfseries\Large <<VERDICT_LABEL>>}\\[1mm]
+    \small M \quad \Passrate \%
+  \end{minipage}%
+}
+\end{minipage}%
+\hspace{0.04\linewidth}%
+\begin{minipage}[t]{0.74\linewidth}
+\begin{tabularx}{\linewidth}{@{}X r r r c@{}}
+\toprule
+\textbf{DOF} & \textbf{pass [\%]} & \textbf{watch [\%]} & \textbf{action [\%]} & \textbf{results} \\
+\midrule
+<<TABLE_PASSRATE_SUMMARY>>
+\bottomrule
+\end{tabularx}
+\end{minipage}
+\vspace{5mm}
+
+%-------------------------maximum error metrics ------------------------------
+\SectionBar{Maximum error metrics }
+\begin{tabularx}{\linewidth}{@{}X X c@{}}
+\toprule
+\textbf{Max. MAE} & \textbf{Max. RMSE} & \textbf{Max. Absolute Error} \\
+\midrule
+<<MAX_MAE>> & <<MAX_RMSE>> & <<MAX_ABS_ERROR_UNIT>> \\
+\bottomrule
+\end{tabularx}
+\vspace{5mm}
+
+\SectionBar{Applied tolerance levels and evaluation criteria}
+\begin{tabularx}{\linewidth}{@{}X l l l@{}}
+\toprule
+\textbf{Metric} & \textbf{Pass} & \textbf{Watch} & \textbf{Action} \\
+\midrule
+\textcolor{extdlabel}{Tracking performance (translation)} &
+$\leq <<TOL_ACCEPT>>$ mm &
+$<<TOL_ACCEPT>> - <<TOL_WATCH>> $ mm &
+$> <<TOL_WATCH>>$ mm \\
+\textcolor{extdlabel}{Tracking performance (rotation)} &
+$\leq <<TOL_ACCEPT>>^\circ$ &
+$<<TOL_ACCEPT>> - <<TOL_WATCH>>  ^\circ$ &
+$> <<TOL_WATCH>> ^\circ$ \\
+\midrule
+\textbf{Criterion} &  &  &  \\
+\midrule
+\textcolor{extdlabel}{Pass rate [\%]} &
+$\geq 99$ &
+95--99 &
+$<95$ \\
+\textcolor{extdlabel}{Watch rate [\%]} &
+$\leq 1$ &
+1--5 &
+-- \\
+\textcolor{extdlabel}{Action rate [\%]} &
+0 &
+0 &
+$>0$ \\
+\bottomrule
+\end{tabularx}
+
+\vspace{5mm}
+
+\noindent
+\textbf{Abbrevations:} \\
+DOF = degree of freedom \\
+MAE = mean average error \\
+RMSE = root mean square error \\
+
+%-----------------Unterschrift-----------------
+\vspace{2cm}
+\noindent
+\begin{tabularx}{\linewidth}{@{}X@{\hspace{1.5cm}}X@{}}
+\hrulefill & \hrulefill \\
+Date & Signature \\
+\end{tabularx}
+
+\clearpage

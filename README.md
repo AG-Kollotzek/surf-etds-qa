@@ -77,6 +77,8 @@ darauf zugreifen können.
    (Longitudinal, Lateral, Vertical, Roll, Pitch, Yaw) mit beiden Deflections auf gemeinsamer,
    auf den ersten Sync-Puls bezogener Zeitachse (grau schraffiert = Messfenster, gepunktet =
    Sync-Pulse), ein RMSE-Feld und die Sphere-Detection-Vergleichstabelle.
+6. **`create_report.py`** setzt aus den Ergebnissen von `numqa` + `plotqa` den jährlichen
+   QA-Report als PDF zusammen (siehe [Report](#report)).
 
 > `numqa` und `plotqa` werten per Absprache nur `single angle`-Messreihen aus – die Couch-Serie ist
 > laut Messprotokoll für die jährliche QA nicht erforderlich. Die Spalten `Meas_Couch_Type` und
@@ -98,6 +100,37 @@ Nullpositions-Zeile (Couch-Serie über `R_pos` unterschieden) und stellt gegenü
 SD-Referenzkoordinaten, SD-Bewegungsvektor, Phantom-Bewegungsvektor (Kinematik auf `H/V/R_pos`),
 Bewegungsfehler (SD − Phantom) und Surface-Tracking-Vektor (ETD am Ende des Messfensters).
 
+## Report
+
+```bash
+python etds_qa_evaluation.py plotqa 1     # Plotseiten + 02-CSVs
+python etds_qa_evaluation.py numqa 1      # Passraten- und Fehler-Tabellen
+python create_report.py 1                 # PDF-Report für Linac 1
+```
+
+`create_report.py` sucht in `data/process/L<n>/` automatisch die neueste Auswertung (oder die von
+`--date YYYY-MM-DD`), füllt die LaTeX-Vorlage in `report/template/` und kompiliert mit XeLaTeX
+(`fontspec`) nach `report/output/ETDS_L<n>_QA_Report_<Datum>.pdf`. Aufbau: Overview-Seite,
+zwei Detailseiten (Passraten je Messung, Fehlermetriken) und angehängt je eine Plotseite für RT
+und 32 °C aus `data/process/L<n>/single_angle/`.
+
+| Quelle | füllt |
+|---|---|
+| `ETDS_L<n>_passrate_summary_<Datum>.csv` | Passraten je DoF + Ampel-Box (Seite 1) |
+| `ETDS_L<n>_numqa_<Datum>.csv` | max. MAE/RMSE/Absolutfehler (Seite 1), Fehlertabelle (Seite 3) |
+| `ETDS_L<n>_passrate_<Datum>.csv` | Passraten je Messung (Seite 2) |
+| `single_angle/L<n>_<RT\|32>_Couch*_<Datum>_QA.pdf` | Plotseiten im Anhang |
+| `report/report_config.json` | „Tested by", Institution, Phantom (derzeit Dummy-Werte) |
+| `report/history/L<n>_history.csv` | Vorjahreswerte im Jahresvergleich (aktuell leer) |
+
+Bewertung je Zeile (1-mm-Kriterium): **Action** ab einem Action-Punkt oder pass < 95 %, **Watch**
+bei 95–99 % pass mit 1–5 % watch, sonst **Pass**. Die Ampel-Box auf Seite 1 zeigt das schlechteste
+Ergebnis aller sechs Freiheitsgrade, den größten absoluten Fehler und die über alle DoF gepoolte
+Gesamt-Passrate. Die Toleranzwerte stammen aus `qa_metrics.TOLERANCE_ACCEPT/WATCH`.
+
+`--author "Max Mustermann"` überschreibt den Namen einmalig, `--out` das Ziel-PDF, `--keep-build`
+behält die Hilfsdateien in `report/build/L<n>/` für die Fehlersuche.
+
 ## Repo-Struktur
 
 ```
@@ -106,6 +139,12 @@ etds_qa_evaluation.py      CLI + Orchestrierung (process/plotpaper/plotqa/numqa)
 qa_metrics.py              DOF_SPEC (Zuordnung/Vorzeichen), Messfenster, MAE/RMSE/MaxAE, Tabellen-Aggregation
 sphere_detection.py        Auswertung der *_QA.csv (röntgenbasierte Kugelposition) + Vergleichstabelle
 qa_plots.py                A4-QA-Übersicht (8 Felder) für den plotqa-Modus
+create_report.py           Baut den Jahres-QA-Report (LaTeX -> PDF) aus den numqa/plotqa-Ergebnissen
+report/template/           LaTeX-Vorlage (main.tex + Report/*.tex + Logo), Platzhalter <<...>>
+report/report_config.json  Report-Kopfdaten (Tested by, Institution, Phantom)
+report/history/            Vorjahreswerte je Linac für den Jahresvergleich
+report/output/             Fertige Report-PDFs
+report/build/              Zwischenstand des LaTeX-Laufs (wird bei jedem Lauf neu erzeugt)
 etds_qa_2026_config.json   Messungs-Metadaten (Linac, Deflection, Couch-Typ/-Winkel, Heizpads, Zeitstempel)
 zoom_box_config.json       Persistierte Zoom-Box-Layouts der interaktiven Paper-Plots (pro Messreihe)
 kinematics.py              Vorwärtskinematik Motorachsen -> klinische 6-DoF-Koordinaten (ohne Fehler)
