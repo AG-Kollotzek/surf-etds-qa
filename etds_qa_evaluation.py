@@ -626,8 +626,11 @@ def run_plotqa(records, target_linac, process_base_dir, date_str):
                 print(f"   [!] AE-Zeitreihe nicht berechenbar für {r['g_label']}: {e}")
                 r['ae_time'] = None
 
-        # Sphere-Detection-Tabelle aus der zugehörigen *_QA.csv (alle Deflections gemeinsam).
+        # Sphere-Detection aus der zugehörigen *_QA.csv (alle Deflections gemeinsam).
+        # Die Rohvektoren speisen sowohl die Vergleichstabelle (Seite 1, Feld 8) als auch
+        # den Spider-Plot (Seite 2) - einmal berechnen, damit beide dieselben Zahlen zeigen.
         sd_table = None
+        sd_vectors = None
         try:
             sd_path = sphere_detection.qa_csv_path_for(recs[0]['surf_csv'])
             if os.path.exists(sd_path):
@@ -635,18 +638,20 @@ def run_plotqa(records, target_linac, process_base_dir, date_str):
                          'couch_angle': r['meta'].get('couch_angle', 0),
                          'df_etd': r['df_etd'],
                          't_eval': r['window'][1]} for r in recs]
+                sd_vectors = sphere_detection.build_sphere_detection_vectors(sd_path, runs)
                 sd_table = sphere_detection.build_sphere_detection_table(sd_path, runs)
             else:
                 print(f"   [!] Keine Sphere-Detection-Datei gefunden: {sd_path}")
         except Exception as e:
-            print(f"   [!] Sphere-Detection-Tabelle nicht erstellbar: {e}")
+            print(f"   [!] Sphere-Detection-Auswertung nicht erstellbar: {e}")
 
         title = f"ETDS QA Overview - L{target_linac} | Pads {pad_folder}°C | Couch {couch_angle}deg"
         save_path = process_base_dir / recs[0]['couch_folder'] / \
             f"L{target_linac}_{pad_folder}_Couch{couch_angle}_{date_str}_QA.pdf"
 
-        plot_qa_overview(recs, sd_table=sd_table, title=title, save_path=save_path)
-        print(f"   [✓] QA-Übersicht gespeichert: {save_path}")
+        plot_qa_overview(recs, sd_table=sd_table, title=title, save_path=save_path,
+                         sd_vectors=sd_vectors)
+        print(f"   [✓] QA-Übersicht (2 Seiten) gespeichert: {save_path}")
 
 
 # ------------------------------------------

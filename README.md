@@ -73,10 +73,14 @@ darauf zugreifen können.
 4. `numqa` führt die `03_alldof_parameters.csv` aller Messungen zu einer Linac-Tabelle
    `data/process/L<n>/ETDS_L<n>_numqa_<Datum>.csv` zusammen (Spalten: DoF, Unit, Deflection,
    Pad_Temperature, Meas_Couch_Type, Couch_Angle, MAE, RMSE, MaxAE, N_Samples).
-5. `plotqa` erzeugt je Temperatursetting eine A4-Seite mit 8 Feldern: sechs DoF-Felder
-   (Longitudinal, Lateral, Vertical, Roll, Pitch, Yaw) mit beiden Deflections auf gemeinsamer,
-   auf den ersten Sync-Puls bezogener Zeitachse (grau schraffiert = Messfenster, gepunktet =
-   Sync-Pulse), ein RMSE-Feld und die Sphere-Detection-Vergleichstabelle.
+5. `plotqa` erzeugt je Temperatursetting ein **zweiseitiges** A4-PDF:
+   - *Seite 1* mit 8 Feldern: sechs DoF-Felder (Longitudinal, Lateral, Vertical, Roll, Pitch,
+     Yaw) mit beiden Deflections auf gemeinsamer, auf den ersten Sync-Puls bezogener Zeitachse
+     (grau schraffiert = Messfenster, gepunktet = Sync-Pulse), ein RMSE-Feld und die
+     Sphere-Detection-Vergleichstabelle.
+   - *Seite 2* mit dem Spider-Plot der Sphere-Detection-Abweichungen: Radarplot über die drei
+     Translationsachsen mit den Beträgen von `|SD − Phantom|` und `|SD − Surface Tracking|`
+     je Deflection (Deflection 1 rot, Deflection 2 blau), inkl. Toleranzringe und Wertetabelle.
 6. **`create_report.py`** setzt aus den Ergebnissen von `numqa` + `plotqa` den jährlichen
    QA-Report als PDF zusammen (siehe [Report](#report)).
 

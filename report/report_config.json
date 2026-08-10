@@ -1,5 +1,9 @@
 {
-  "author": "Vorname Nachname",
+  "author": "QMP2, QMP3",
   "institution": "tirol kliniken",
-  "phantom": "SURF"
+  "phantom": "SURF",
+  "contact_name": "Lead1",
+  "contact_mail_1": "",
+  "contact_mail_2": "",
+  "igrt_lab_url": "https://igrt-lab.i-med.ac.at/"
 }

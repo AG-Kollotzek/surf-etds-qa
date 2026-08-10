@@ -50,6 +50,13 @@ DUMMY_DEFAULTS = {
     "author": "Vorname Nachname",
     "institution": "tirol kliniken",
     "phantom": "SURF",
+    # Briefkopf im Detailreport (neben den Abkuerzungen) und URL unter dem ETDS-Schriftzug.
+    # Achtung: die Werte werden unescaped in die .tex-Vorlage eingesetzt - LaTeX-Sonderzeichen
+    # (_ % & # $) muessen in report_config.json bereits maskiert sein (z.B. "a\\_b").
+    "contact_name": "Lead1",
+    "contact_mail_1": "",
+    "contact_mail_2": "",
+    "igrt_lab_url": "https://igrt-lab.i-med.ac.at/",
 }
 
 DESCRIPTION_TEXT = (
@@ -62,7 +69,11 @@ DESCRIPTION_TEXT = (
     "according to predefined translational and rotational motion sequences. Before, between, and "
     "after each motion sequence, the position of the sphere, located at the center of the "
     "phantom, initially aligned with the treatment isocenter, is determined using sphere "
-    "detection to verify the system's localization accuracy as part of the annual QA procedure."
+    "detection to verify the system's localization accuracy as part of the annual QA procedure. "
+    "The underlying base kinematics of the phantom is calibrated against the sphere detection "
+    "system, averaged across all linacs; the dynamic displacement between the targeted positions "
+    "themselves is driven by stepper motors accurate to the micrometer range and therefore "
+    "remains independent of this calibration."
 )
 
 NUM_WORDS = {1: "One", 2: "Two", 3: "Three", 4: "Four", 5: "Five", 6: "Six",
@@ -411,6 +422,10 @@ def main():
         "AUTHOR": settings["author"],
         "INSTITUTION": settings["institution"],
         "PHANTOM": settings["phantom"],
+        "CONTACT_NAME": settings["contact_name"],
+        "CONTACT_MAIL_1": settings["contact_mail_1"],
+        "CONTACT_MAIL_2": settings["contact_mail_2"],
+        "IGRT_LAB_URL": settings["igrt_lab_url"],
         "OVERALL_PASSRATE": fmt_number(pooled_passrate),
         "VERDICT_COLOR": VERDICT_COLOR[overall_verdict],
         "VERDICT_LABEL": VERDICT_LABEL[overall_verdict],

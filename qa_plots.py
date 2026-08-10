@@ -1,7 +1,7 @@
-"""
-QA-Uebersichtsplot (plotqa): eine A4-Seite je Temperatursetting.
+r"""
+QA-Uebersichtsplot (plotqa): zwei A4-Seiten je Temperatursetting.
 
-Aufbau (8 Felder von oben nach unten):
+SEITE 1 - Zeitreihen-Uebersicht, Aufbau (8 Felder von oben nach unten):
     1-6  je ein Freiheitsgrad (Longitudinal, Lateral, Vertical, Roll, Pitch, Yaw).
          Beide Deflections liegen in denselben Achsen, Phantom-Soll gestrichelt,
          ETD-Ist durchgezogen. Der graue schraffierte Bereich markiert das Messfenster
@@ -24,11 +24,23 @@ Sync-Peaks, Messfenster, Toleranz-Schlauch) einmal fuer beide Deflections beschr
 Gemeinsame Zeitachse: alle Messungen werden auf die Mitte ihres ERSTEN Sync-Pulses
 bezogen (t = 0). Dadurch starten beide Deflections deckungsgleich; ihre Messfenster enden
 unterschiedlich spaet, weil die grosse Auslenkung laenger dauert.
+
+SEITE 2 - Spider-Plot der Sphere-Detection-Abweichungen (plot_sphere_detection_spider):
+    Radarplot mit den drei Translationsachsen (Lateral, Longitudinal, Vertical). Aufgetragen
+    sind die BETRAEGE zweier Abweichungen je Deflection, jeweils an der ausgelenkten Position
+    (Ende des Messfensters):
+        |SD - Phantom|           roentgenbasierte Kugelposition gegen das Achs-Soll
+        |SD - Surface Tracking|  roentgenbasierte Kugelposition gegen das ETD-Tracking
+    Deflection 1 in Rottoenen, Deflection 2 in Blautoenen (SPIDER_SHADES); der dunklere Ton
+    ist jeweils der Vergleich gegen das Phantom-Soll. Zusaetzlich sind die Toleranzringe aus
+    qa_metrics.TOLERANCE_ACCEPT/WATCH eingezeichnet. Unter dem Radarplot stehen dieselben
+    Werte noch einmal als Tabelle, da sich Betraege im Radar nicht ablesen lassen.
 """
 
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.lines import Line2D
 import numpy as np
 
@@ -67,6 +79,195 @@ MIN_Y_SPAN = 6.0
 _LEGEND_SCALE = 1.25
 
 A4_PORTRAIT_INCHES = (8.27, 11.69)
+
+# --- Spider-Plot (Seite 2): Sphere-Detection-Abweichungen ---------------------------------
+# Achsen des Spider-Plots, Reihenfolge = Komponentenreihenfolge der Vektoren aus
+# sphere_detection.build_sphere_detection_vectors (= qa_metrics.VECTOR_DOFS).
+SPIDER_AXIS_LABELS = ('Lateral (X)', 'Longitudinal (Y)', 'Vertical (Z)')
+
+# Je Deflection zwei Abstufungen: Deflection 1 rot, Deflection 2 blau (Vorgabe). Der
+# dunklere Ton steht jeweils fuer den Vergleich gegen das Achs-Soll (Phantom), der hellere
+# fuer den Vergleich gegen das Surface-Tracking.
+SPIDER_SHADES = {
+    1: {'vs_phantom': '#B2182B', 'vs_surface': '#EF8A62'},
+    2: {'vs_phantom': '#2166AC', 'vs_surface': '#67A9CF'},
+}
+_SPIDER_FALLBACK_SHADES = {'vs_phantom': '#444444', 'vs_surface': '#999999'}
+
+# Linienstil/Marker trennen die beiden Vergleichsarten zusaetzlich zur Helligkeit, damit
+# der Plot auch im Graustufen-Ausdruck lesbar bleibt.
+_SPIDER_STYLES = {
+    'vs_phantom': {'linestyle': '-', 'marker': 'o'},
+    'vs_surface': {'linestyle': '--', 'marker': 's'},
+}
+
+
+def _shades_for(deflection):
+    return SPIDER_SHADES.get(deflection, _SPIDER_FALLBACK_SHADES)
+
+
+def _nice_ticks(vmax, n=4):
+    """Runde Radialticks bis knapp ueber vmax (ohne die 0, die faellt mit dem Zentrum zusammen)."""
+    if not np.isfinite(vmax) or vmax <= 0:
+        vmax = 1.0
+    raw = vmax / n
+    exp = np.floor(np.log10(raw))
+    frac = raw / (10 ** exp)
+    nice = 1.0 if frac <= 1 else 2.0 if frac <= 2 else 5.0 if frac <= 5 else 10.0
+    step = nice * (10 ** exp)
+    ticks = np.arange(step, step * (n + 1.5), step)
+    return ticks[ticks <= step * (np.ceil(vmax / step) + 0.001)]
+
+
+def _spider_series(sd_vectors):
+    """Die vier Kurven des Spider-Plots als Liste von dicts (Betraege der Abweichungen).
+
+    Reihenfolge: je Deflection zuerst der Vergleich gegen das Phantom-Soll, dann gegen das
+    Surface-Tracking. Serien ohne jeden gueltigen Wert (z.B. leere Sphere-Spalten in der
+    *_QA.csv) werden weggelassen.
+    """
+    series = []
+    for entry in sorted(sd_vectors, key=lambda e: e.get('deflection', 0)):
+        deflection = entry.get('deflection')
+        shades = _shades_for(deflection)
+        for key, desc in (('error_vs_phantom', 'SD - Phantom'),
+                          ('error_vs_surface', 'SD - Surface Tracking')):
+            values = np.abs(np.asarray(entry[key], dtype=float))
+            if not np.any(np.isfinite(values)):
+                continue
+            style_key = 'vs_phantom' if key == 'error_vs_phantom' else 'vs_surface'
+            series.append({
+                'label': f"D{deflection}: |{desc}|",
+                'values': values,
+                'color': shades[style_key],
+                **_SPIDER_STYLES[style_key],
+            })
+    return series
+
+
+def _render_spider(ax, series):
+    """Radarplot der Betragsabweichungen auf den drei Translationsachsen."""
+    n_axes = len(SPIDER_AXIS_LABELS)
+    angles = np.linspace(0, 2 * np.pi, n_axes, endpoint=False)
+    closed = np.concatenate([angles, angles[:1]])
+
+    ax.set_theta_offset(np.pi / 2)   # erste Achse nach oben
+    ax.set_theta_direction(-1)       # im Uhrzeigersinn
+
+    if not series:
+        ax.text(0.5, 0.5, 'Keine Sphere-Detection-Daten verfuegbar',
+                transform=ax.transAxes, ha='center', va='center',
+                fontsize=9, style='italic', color='0.35')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        return
+
+    vmax = np.nanmax([np.nanmax(s['values']) for s in series])
+    # Der Accept-Ring soll immer sichtbar bleiben, damit die Werte einen festen Bezug haben;
+    # der Watch-Ring nur, wenn er die Datenskala nicht unnoetig stauchen wuerde.
+    r_max = max(float(vmax) * 1.18, TOLERANCE_ACCEPT * 1.18)
+
+    for level, color, name in ((TOLERANCE_ACCEPT, _COLOR_ACCEPT, 'accept'),
+                               (TOLERANCE_WATCH, _COLOR_WATCH, 'watch')):
+        if level <= r_max:
+            ax.plot(np.linspace(0, 2 * np.pi, 181), np.full(181, level),
+                    color=color, linewidth=1.0, linestyle=':', zorder=1.5)
+            ax.text(np.deg2rad(62), level, f" {name} ({level:g} mm)",
+                    fontsize=6.5, color=color, ha='left', va='bottom', zorder=6)
+
+    for s in series:
+        vals = np.asarray(s['values'], dtype=float)
+        vals_closed = np.concatenate([vals, vals[:1]])
+        ax.plot(closed, vals_closed, color=s['color'], linewidth=1.6,
+                linestyle=s['linestyle'], marker=s['marker'], markersize=4.5,
+                label=s['label'], zorder=3)
+        ax.fill(closed, vals_closed, color=s['color'], alpha=0.07, zorder=2)
+
+    ax.set_xticks(angles)
+    ax.set_xticklabels(SPIDER_AXIS_LABELS, fontsize=9, fontweight='bold')
+    ax.tick_params(axis='x', pad=18)
+
+    ticks = _nice_ticks(r_max / 1.18)
+    ax.set_yticks(ticks)
+    ax.set_yticklabels([f"{t:g}" for t in ticks], fontsize=7, color='0.35')
+    ax.set_ylim(0, r_max)
+    ax.set_rlabel_position(90.0 / len(SPIDER_AXIS_LABELS))
+    ax.grid(True, linestyle=':', alpha=0.6, linewidth=0.6)
+    ax.set_axisbelow(True)
+
+    # Radiale Achslinien betonen (die drei Speichen).
+    for ang in angles:
+        ax.plot([ang, ang], [0, r_max], color='0.55', linewidth=0.8, zorder=1)
+
+
+def _render_spider_values(ax, sd_vectors):
+    """Kompakte Wertetabelle unter dem Spider-Plot (Betraege lassen sich im Radar nicht ablesen)."""
+    ax.axis('off')
+    if not sd_vectors:
+        return
+
+    rows = []
+    for entry in sorted(sd_vectors, key=lambda e: e.get('deflection', 0)):
+        d = entry.get('deflection')
+        for key, desc in (('error_vs_phantom', 'SD - Phantom'),
+                          ('error_vs_surface', 'SD - Surface Tracking')):
+            vals = np.abs(np.asarray(entry[key], dtype=float))
+            rows.append([f"D{d}", f"|{desc}|"] + ['-' if not np.isfinite(v) else f"{v:.2f}" for v in vals])
+
+    table = ax.table(cellText=rows,
+                     colLabels=['Defl.', 'Deviation'] + [f"{lbl} [mm]" for lbl in SPIDER_AXIS_LABELS],
+                     cellLoc='center', loc='upper center')
+    table.auto_set_font_size(False)
+    table.set_fontsize(7.5)
+    table.scale(1.0, 1.4)
+
+    for (row, col), cell in table.get_celld().items():
+        cell.set_edgecolor('0.75')
+        cell.set_linewidth(0.6)
+        if row == 0:
+            cell.set_facecolor('0.92')
+            cell.set_text_props(fontweight='bold')
+        elif col <= 1:
+            cell.set_text_props(fontweight='bold')
+
+
+def plot_sphere_detection_spider(sd_vectors, title="Sphere detection - absolute deviations",
+                                 subtitle=None):
+    """Baut die Spider-Plot-Seite (A4) und gibt die Figure zurueck.
+
+    sd_vectors: Liste aus sphere_detection.build_sphere_detection_vectors (oder None).
+    Gezeigt werden je Deflection die Betraege von (SD - Phantom) und (SD - Surface Tracking)
+    auf den drei Translationsachsen.
+    """
+    sd_vectors = sd_vectors or []
+    series = _spider_series(sd_vectors)
+
+    fig = plt.figure(figsize=A4_PORTRAIT_INCHES, dpi=150)
+    fig.suptitle(title, fontsize=9, fontweight='bold', y=0.985)
+    if subtitle:
+        fig.text(0.5, 0.958, subtitle, ha='center', va='top', fontsize=8, color='0.3')
+
+    # Die Polar-Achse ist quadratisch; die Hoehe ist hier der begrenzende Faktor, der Kreis
+    # fuellt die Box also vertikal aus. Legende und Tabelle schliessen direkt darunter an.
+    ax = fig.add_axes([0.10, 0.44, 0.80, 0.465], projection='polar')
+    _render_spider(ax, series)
+
+    if series:
+        fig.legend(loc='upper center', bbox_to_anchor=(0.5, 0.425), ncol=2, fontsize=7.5,
+                   frameon=True, edgecolor='black', handlelength=2.4,
+                   borderpad=0.5, labelspacing=0.4, columnspacing=1.4)
+
+    ax_tbl = fig.add_axes([0.08, 0.16, 0.84, 0.20])
+    _render_spider_values(ax_tbl, sd_vectors)
+
+    fig.text(0.5, 0.235,
+             'Absolute deviations of the X-ray based sphere detection from the phantom axis '
+             'setpoint and from the ETD surface tracking,\nevaluated at the deflected position '
+             f'(end of measurement window). Tolerance rings: accept {TOLERANCE_ACCEPT:g} mm, '
+             f'watch {TOLERANCE_WATCH:g} mm.',
+             ha='center', va='top', fontsize=7, color='0.35')
+
+    return fig
 
 
 def _color_for(deflection):
@@ -221,12 +422,18 @@ def _render_sd_table(ax, sd_table):
             fontsize=8.5, fontweight='bold')
 
 
-def plot_qa_overview(records, sd_table=None, title="ETDS QA Overview", save_path=None):
-    """Erzeugt die A4-QA-Uebersicht und speichert sie als PDF.
+def plot_qa_overview(records, sd_table=None, title="ETDS QA Overview", save_path=None,
+                     sd_vectors=None):
+    """Erzeugt die A4-QA-Uebersicht und speichert sie als zweiseitiges PDF.
+
+    Seite 1: die acht Felder der Zeitreihen-Uebersicht (siehe Modul-Docstring).
+    Seite 2: Spider-Plot der Sphere-Detection-Abweichungen (plot_sphere_detection_spider).
 
     records: Liste der Messungs-Records (je Deflection einer), jeweils mit
              'df_phantom', 'df_etd', 'sync_info', 'window' und 'meta'.
     sd_table: DataFrame aus sphere_detection.build_sphere_detection_table (oder None).
+    sd_vectors: Liste aus sphere_detection.build_sphere_detection_vectors (oder None) -
+             Datenbasis der zweiten Seite.
     """
     prev_backend = matplotlib.get_backend()
     matplotlib.use('Agg')  # reine Datei-Ausgabe, kein interaktives Fenster noetig
@@ -335,9 +542,19 @@ def plot_qa_overview(records, sd_table=None, title="ETDS QA Overview", save_path
                    handletextpad=0.4 * _LEGEND_SCALE)
 
 
+        # Seite 2: Spider-Plot der Sphere-Detection-Abweichungen. Wird auch ohne Daten
+        # erzeugt (mit Hinweistext), damit der Seitenaufbau des Reports konstant bleibt.
+        fig_spider = plot_sphere_detection_spider(
+            sd_vectors,
+            title='Sphere detection - absolute deviations',
+            subtitle=title)
+
         if save_path is not None:
-            fig.savefig(save_path, format='pdf')
+            with PdfPages(save_path) as pdf:
+                pdf.savefig(fig)
+                pdf.savefig(fig_spider)
         plt.close(fig)
+        plt.close(fig_spider)
         return save_path
     finally:
         matplotlib.use(prev_backend, force=False)

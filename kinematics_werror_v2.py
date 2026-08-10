@@ -3,6 +3,31 @@ from uncertainties import ufloat
 from uncertainties import unumpy as unp
 import uncertainties.umath as umath
 
+# --- Empirische Radius-Kalibrierung ------------------------------------------------------
+# Der aus den Bauteilmassen aufsummierte `radius` war systematisch zu klein: die Kinematik
+# unterschaetzte den Longitudinal-Verschub durchgehend um 0.4-1.3 mm, mit der Auslenkung
+# wachsend. Kalibriert gegen die roentgenbasierte Sphere-Detection (stereoskopisches kV des
+# ExacTrac) aller vier Linacs, je 2 Messreihen x 2 Deflections = 16 Punkte, nur 'single angle':
+#
+#     Linac    delta [mm]     RMS(y,z) vorher -> nachher
+#     L0            3.538          0.515  ->  0.099
+#     L1            4.831          0.743  ->  0.274
+#     L3            4.311          0.626  ->  0.112
+#     L4            3.945          0.583  ->  0.150
+#     ---------------------------------------------------
+#     Mittel        4.156     SD 0.550 (Spanne 1.29 mm)
+#
+# Der Wert geht additiv in `radius` und damit ausschliesslich in y_local/z_local ein; die
+# Winkelformeln (alpha_offset, pitch_rad_local, hAxis_diagonal) enthalten `radius` nicht und
+# bleiben unveraendert. Das ist bewusst so: geometry_diagnostic.py hat die Winkelgeometrie als
+# unauffaellig bestaetigt (Baseline 0.04+/-0.04 deg bei V=0, Steigung 0.999-1.034), und eine
+# Korrektur ueber hAxis_vertical haette den Fit verschlechtert (RMS 0.500 statt 0.186 mm) UND
+# pitch um bis zu 0.13 deg verschoben. Details siehe radius_calibration.py.
+#
+# Die SD ueber die vier Linacs dient als Unsicherheit - sie deckt die Streuung zwischen den
+# Standorten ab und ist damit konservativer als der Fit-Fehler einer einzelnen Messreihe.
+SD_CALIB_DEFAULT = ufloat(4.156, 0.550)
+
 
 class SurfKinematics:
     """
@@ -48,7 +73,7 @@ class SurfKinematics:
     longitudinal validiert - nur die Rotationskoordinaten (pitch/roll/yaw) wurden hier geprueft.
     """
 
-    def __init__(self, err_linear=0.0025, err_rot=0.1, err_couch=0.5):
+    def __init__(self, err_linear=0.0025, err_rot=0.1, err_couch=0.5, sd_calib=None):
         # 1. Konstanten & Bauteilmaße (mit Messunsicherheit der Schublehre in mm)
         ERR = 0.2  # Standardfehler bei Schublehre
         # Hebel der H-Achse
@@ -61,7 +86,13 @@ class SurfKinematics:
         phantomCenterDistance = ufloat(75, ERR)
         phantomToTableDistance = ufloat(21, 1) + ufloat(1, ERR) # Nachmessen, passt !
         self.sliderShift = ufloat(46, ERR)
-        self.radius = rotatationTable_height + phantomToTableDistance + phantomCenterDistance + self.sliderShift + self.hAxis_vertical
+
+        # Empirische Radius-Kalibrierung (siehe radius_calibration.py und SD_CALIB_DEFAULT):
+        # rein additiver Hebelarm-Zuschlag, greift NUR in die Translation (y/z), nicht in die
+        # Winkelformeln. sd_calib=0 liefert das unkalibrierte Modell (fuer Diagnose/Reproduktion).
+        self.sd_calib = SD_CALIB_DEFAULT if sd_calib is None else sd_calib
+        self.radius = (rotatationTable_height + phantomToTableDistance + phantomCenterDistance
+                       + self.sliderShift + self.hAxis_vertical + self.sd_calib)
 
         # Standard-Fehler der Achsen und Couch
         self.err_linear = err_linear

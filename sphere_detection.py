@@ -36,6 +36,14 @@ from qa_metrics import DOF_BY_NAME, VECTOR_DOFS
 # Ab diesem |R_pos| gilt eine Zeile als zur gedrehten Couch-Serie gehoerig.
 _COUCH_R_THRESHOLD_DEG = 45.0
 
+# Point_ID-Schreibweisen je Deflection. Der Blueprint hat die Punkte zwischen den
+# Messtagen umbenannt (L0/L1: '1_minVerschub'/'3_MaxVerschub', ab L3/L4:
+# '1_endposition_d1'/'3_endposition_d2') - beide muessen erkannt werden.
+DEFLECTION_POINT_KEYWORDS = {
+    1: ('minverschub', 'endposition_d1'),
+    2: ('maxverschub', 'endposition_d2'),
+}
+
 
 def qa_csv_path_for(surf_csv_path):
     """Pfad der zugehoerigen Sphere-Detection-Datei (gleicher Name + '_QA')."""
@@ -74,17 +82,21 @@ def _couch_group_mask(df, couch_angle):
 def select_deflection_rows(df_sd, couch_angle, deflection):
     """Liefert (referenz_zeile, verschub_zeile) fuer eine Deflection einer Couch-Serie.
 
-    deflection 1 -> 'minVerschub', deflection 2 -> 'MaxVerschub'.
+    deflection 1 -> 'minVerschub'/'endposition_d1', deflection 2 -> 'MaxVerschub'/
+    'endposition_d2'. Beide Schreibweisen kommen vor: die aelteren Messungen (L0/L1,
+    Juli 2026) nutzen die Verschub-Namen, ab dem Blueprint-Update (L3/L4, 2026-08-06)
+    heissen dieselben Punkte 'endposition_dX'.
     Als Referenz dient die letzte Nullpositions-Zeile vor der Verschub-Zeile.
     """
     group = df_sd[_couch_group_mask(df_sd, couch_angle)]
     if group.empty:
         raise ValueError(f"Keine Sphere-Detection-Zeilen fuer couch_angle={couch_angle} gefunden.")
 
-    keyword = 'minverschub' if int(deflection) == 1 else 'maxverschub'
-    hits = [i for i, row in group.iterrows() if keyword in str(row.get('Point_ID', '')).lower()]
+    keywords = DEFLECTION_POINT_KEYWORDS[1 if int(deflection) == 1 else 2]
+    hits = [i for i, row in group.iterrows()
+            if any(k in str(row.get('Point_ID', '')).lower() for k in keywords)]
     if not hits:
-        raise ValueError(f"Keine '{keyword}'-Zeile fuer Deflection {deflection} "
+        raise ValueError(f"Keine Zeile {' / '.join(keywords)} fuer Deflection {deflection} "
                          f"(couch_angle={couch_angle}) gefunden.")
     defl_idx = hits[0]
 
@@ -155,8 +167,12 @@ def fmt_vector(vec, decimals=2):
     return '(' + ', '.join(parts) + ')'
 
 
-def build_sphere_detection_table(sd_csv_path, deflection_runs, terminal_version='legacy'):
-    """Vergleichstabelle der Sphere-Detection-Punkte fuer alle Deflections einer Messreihe.
+def build_sphere_detection_vectors(sd_csv_path, deflection_runs, terminal_version='legacy'):
+    """Rohe (numerische) Vektoren je Deflection einer Messreihe.
+
+    Gemeinsame Basis fuer die Vergleichstabelle (build_sphere_detection_table) und den
+    Spider-Plot (qa_plots.plot_sphere_detection_spider) - beide sollen dieselben Zahlen
+    zeigen, deshalb wird die Paarungs- und Kinematiklogik nur hier ausgewertet.
 
     deflection_runs: Liste von dicts mit
         'deflection'   : 1 oder 2
@@ -164,11 +180,13 @@ def build_sphere_detection_table(sd_csv_path, deflection_runs, terminal_version=
         'df_etd'       : ausgerichteter ETD-DataFrame (02_..._etd.csv)
         't_eval'       : Zeitpunkt fuer den Surface-Tracking-Vektor (Ende Messfenster)
 
-    Rueckgabe: DataFrame mit einer Zeile je Deflection, Vektoren als formatierte Tripel.
+    Rueckgabe: Liste von dicts (nach Deflection sortiert). Alle Vektoren sind
+    numpy-Arrays der Komponenten (lateral, longitudinal, vertical) in mm - dieselbe
+    Reihenfolge wie qa_metrics.VECTOR_DOFS.
     """
     df_sd = load_sphere_detection(sd_csv_path)
 
-    rows = []
+    out = []
     for run in sorted(deflection_runs, key=lambda r: r['deflection']):
         ref_row, defl_row = select_deflection_rows(df_sd, run['couch_angle'], run['deflection'])
 
@@ -176,16 +194,40 @@ def build_sphere_detection_table(sd_csv_path, deflection_runs, terminal_version=
         sd_move = _sphere_vector(defl_row) - sd_ref
         phantom_move = (_phantom_vector(defl_row, run['couch_angle'], terminal_version)
                         - _phantom_vector(ref_row, run['couch_angle'], terminal_version))
-        error_move = sd_move - phantom_move
         surface_vec = surface_tracking_vector(run['df_etd'], run['t_eval'])
 
+        out.append({
+            'deflection': run['deflection'],
+            'couch_angle': run['couch_angle'],
+            'sd_reference': sd_ref,
+            'sd_movement': sd_move,
+            'phantom_movement': phantom_move,
+            'surface_tracking': surface_vec,
+            # Die beiden Abweichungen, die im Spider-Plot gegenuebergestellt werden:
+            'error_vs_phantom': sd_move - phantom_move,    # Roentgen vs. Achs-Soll
+            'error_vs_surface': sd_move - surface_vec,     # Roentgen vs. Surface-Tracking
+        })
+
+    return out
+
+
+def build_sphere_detection_table(sd_csv_path, deflection_runs, terminal_version='legacy'):
+    """Vergleichstabelle der Sphere-Detection-Punkte fuer alle Deflections einer Messreihe.
+
+    Argumente wie build_sphere_detection_vectors.
+    Rueckgabe: DataFrame mit einer Zeile je Deflection, Vektoren als formatierte Tripel.
+    """
+    vectors = build_sphere_detection_vectors(sd_csv_path, deflection_runs, terminal_version)
+
+    rows = []
+    for entry in vectors:
         rows.append({
-            'Deflection': run['deflection'],
-            'SD - Reference Coordinates': fmt_vector(sd_ref),
-            'SD - Movement Vector': fmt_vector(sd_move),
-            'Phantom Movement Vector': fmt_vector(phantom_move),
-            'Movement Error Vector': fmt_vector(error_move),
-            'Surface Tracking Vector': fmt_vector(surface_vec),
+            'Deflection': entry['deflection'],
+            'SD - Reference Coordinates': fmt_vector(entry['sd_reference']),
+            'SD - Movement Vector': fmt_vector(entry['sd_movement']),
+            'Phantom Movement Vector': fmt_vector(entry['phantom_movement']),
+            'Movement Error Vector': fmt_vector(entry['error_vs_phantom']),
+            'Surface Tracking Vector': fmt_vector(entry['surface_tracking']),
         })
 
     return pd.DataFrame(rows)
