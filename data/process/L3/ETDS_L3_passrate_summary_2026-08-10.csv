@@ -1,0 +1,7 @@
+DoF;Unit;N_Total;N_Pass;N_Watch;N_Act;PassRate_AE;WatchRate_AE;ActRate_AE
+longitudinal;mm;567;567;0;0;100.0;0.0;0.0
+lateral;mm;567;567;0;0;100.0;0.0;0.0
+vertical;mm;567;567;0;0;100.0;0.0;0.0
+roll;deg;567;567;0;0;100.0;0.0;0.0
+pitch;deg;567;567;0;0;100.0;0.0;0.0
+yaw;deg;567;567;0;0;100.0;0.0;0.0

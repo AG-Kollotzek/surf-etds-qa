@@ -1,0 +1,29 @@
+{
+    "Linac": "0",
+    "deflection": 2,
+    "meas_couch_type": "single angle",
+    "heatingpads": "OFF",
+    "etds_timestamp": "163152",
+    "surf_timestamp": "162730",
+    "couch_angle": 0,
+    "sync": {
+        "aligned_first_mid": 231.0985,
+        "aligned_last_mid": 258.776,
+        "phantom_first_mid": 231.0985,
+        "phantom_last_mid": 258.776,
+        "phantom_first_enter": 229.46472058823528,
+        "phantom_last_enter": 257.12480147058824,
+        "etd_raw_first_mid": 6.718999999999999,
+        "etd_raw_last_mid": 34.346500000000006,
+        "etd_raw_first_enter": 5.08425,
+        "etd_raw_last_enter": 32.70007126168224,
+        "scale_factor": 1.0016026907275841,
+        "csv_pair_index": 1,
+        "alignment_anchor": "enter_edge_50pct"
+    },
+    "measurement_window_margin_sec": 3.0,
+    "measurement_window_sec": [
+        234.0985,
+        255.776
+    ]
+}

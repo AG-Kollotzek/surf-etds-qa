@@ -1,0 +1,25 @@
+DoF;Unit;Deflection;Pad_Temperature;Meas_Couch_Type;Couch_Angle;PassRate_AE;WatchRate_AE;ActRate_AE;N_Samples
+longitudinal;mm;1;32C;single angle;0;100.0;0.0;0.0;88
+longitudinal;mm;2;32C;single angle;0;100.0;0.0;0.0;199
+longitudinal;mm;1;RT;single angle;0;100.0;0.0;0.0;88
+longitudinal;mm;2;RT;single angle;0;100.0;0.0;0.0;200
+lateral;mm;1;32C;single angle;0;100.0;0.0;0.0;88
+lateral;mm;2;32C;single angle;0;100.0;0.0;0.0;199
+lateral;mm;1;RT;single angle;0;100.0;0.0;0.0;88
+lateral;mm;2;RT;single angle;0;100.0;0.0;0.0;200
+vertical;mm;1;32C;single angle;0;100.0;0.0;0.0;88
+vertical;mm;2;32C;single angle;0;100.0;0.0;0.0;199
+vertical;mm;1;RT;single angle;0;100.0;0.0;0.0;88
+vertical;mm;2;RT;single angle;0;100.0;0.0;0.0;200
+roll;deg;1;32C;single angle;0;100.0;0.0;0.0;88
+roll;deg;2;32C;single angle;0;100.0;0.0;0.0;199
+roll;deg;1;RT;single angle;0;100.0;0.0;0.0;88
+roll;deg;2;RT;single angle;0;100.0;0.0;0.0;200
+pitch;deg;1;32C;single angle;0;100.0;0.0;0.0;88
+pitch;deg;2;32C;single angle;0;100.0;0.0;0.0;199
+pitch;deg;1;RT;single angle;0;100.0;0.0;0.0;88
+pitch;deg;2;RT;single angle;0;100.0;0.0;0.0;200
+yaw;deg;1;32C;single angle;0;100.0;0.0;0.0;88
+yaw;deg;2;32C;single angle;0;100.0;0.0;0.0;199
+yaw;deg;1;RT;single angle;0;100.0;0.0;0.0;88
+yaw;deg;2;RT;single angle;0;100.0;0.0;0.0;200
