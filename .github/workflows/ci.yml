@@ -21,6 +21,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Fetch the data submodule
+        id: data
+        # surf-etds-data stays private until it is published; without access the smoke test is skipped.
+        continue-on-error: true
+        run: git submodule update --init surf-etds-data
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -37,3 +43,43 @@ jobs:
 
       - name: Unit tests (no TeX needed)
         run: python -m unittest discover -s tests -t . -v
+
+      - name: Evaluation smoke test (raw data -> QA tables equal to the committed ones)
+        if: steps.data.outcome == 'success'
+        run: |
+          for linac in 0 1 3 4; do
+            python etds_qa_evaluation.py process "$linac"
+            python etds_qa_evaluation.py numqa "$linac"
+          done
+          python - <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          import numpy as np
+          import pandas as pd
+
+          REFERENCE = "2026-08-10"
+          failures = []
+          for linac in (0, 1, 3, 4):
+              folder = Path(f"data/process/L{linac}")
+              for kind in ("numqa", "passrate", "passrate_summary"):
+                  pattern = re.compile(rf"ETDS_L{linac}_{kind}_(\d{{4}}-\d{{2}}-\d{{2}})\.csv")
+                  dates = sorted(m.group(1) for p in folder.iterdir() if (m := pattern.fullmatch(p.name)))
+                  new = [d for d in dates if d != REFERENCE]
+                  if REFERENCE not in dates or not new:
+                      failures.append(f"L{linac} {kind}: reference or new table missing ({dates})")
+                      continue
+                  a = pd.read_csv(folder / f"ETDS_L{linac}_{kind}_{REFERENCE}.csv")
+                  b = pd.read_csv(folder / f"ETDS_L{linac}_{kind}_{new[-1]}.csv")
+                  same = a.shape == b.shape and list(a.columns) == list(b.columns)
+                  for column in a.columns if same else []:
+                      if pd.api.types.is_numeric_dtype(a[column]):
+                          same &= bool(np.allclose(a[column], b[column], rtol=1e-9, atol=0, equal_nan=True))
+                      else:
+                          same &= a[column].astype(str).equals(b[column].astype(str))
+                  print(f"L{linac} {kind}: {'equal' if same else 'DIFFERENT'}")
+                  if not same:
+                      failures.append(f"L{linac} {kind}")
+          sys.exit(1 if failures else 0)
+          PY
