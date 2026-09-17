@@ -11,6 +11,7 @@ from matplotlib.patches import ConnectionPatch
 import gc
 
 from DataConverter import ETDQAProcessor
+import data_paths
 import qa_metrics
 from qa_metrics import DOF_SPEC, DOF_BY_NAME
 import sphere_detection
@@ -450,21 +451,13 @@ def process_measurement(m_id, meta, target_linac, raw_base_dir, process_base_dir
     g_label = group_label(meta, target_linac, pad_folder_name)
     couch_folder = meas_couch_type_folder(meta)
 
-    etd_stamp = meta["etds_timestamp"]
-    surf_stamp = meta["surf_timestamp"]
-
-    # Formatieren des ETD-Timestamps falls nötig (z.B. 161959 -> 16-19-59)
-    if len(etd_stamp) == 6 and "-" not in etd_stamp:
-        etd_stamp = f"{etd_stamp[:2]}-{etd_stamp[2:4]}-{etd_stamp[4:]}"
-
-    csv_files = list((raw_base_dir / "surf_phantom").rglob(f"*{surf_stamp}.csv"))
-    json_files = list((raw_base_dir / "etds_scans").rglob(f"*{etd_stamp}.json"))
-    # Die Sphere-Detection-Datei heißt wie die Messdatei mit '_QA' und darf nicht als Messdatei
-    # eingesammelt werden.
-    csv_files = [c for c in csv_files if not c.name.endswith("_QA.csv")]
-
-    if not csv_files or not json_files:
-        print(f"   [!] FEHLT: Rohdaten für ID {m_id}. Überspringe.")
+    # Rohdaten aus dem Submodule surf-etds-data (data_paths.py): genau ein Treffer je Zeitstempel.
+    # Die Sphere-Detection-Datei (*_QA.csv) wird nie als Messdatei eingesammelt.
+    try:
+        csv_files = [data_paths.surf_csv(target_linac, meta["surf_timestamp"])]
+        json_files = [data_paths.etd_json(target_linac, meta["etds_timestamp"])]
+    except FileNotFoundError as exc:
+        print(f"   [!] FEHLT: Rohdaten für ID {m_id} ({exc}). Überspringe.")
         return None
 
     out_dir = process_base_dir / couch_folder / measurement_folder_name(meta, target_linac, pad_folder_name, date_str)
@@ -798,7 +791,7 @@ def main():
               f"(deflection={target_deflection_input or 'all'}, heatingpads={target_pads_input or 'all'}) gefunden.")
         return
 
-    raw_base_dir = Path(f"data/raw/L{target_linac}")
+    raw_base_dir = data_paths.CAMPAIGNS_DIR
     process_base_dir = Path(f"data/process/L{target_linac}")
     date_str = datetime.now().strftime("%Y-%m-%d")
 

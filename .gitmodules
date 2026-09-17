@@ -1,0 +1,3 @@
+[submodule "surf-etds-data"]
+	path = surf-etds-data
+	url = https://github.com/AG-Kollotzek/surf-etds-data.git

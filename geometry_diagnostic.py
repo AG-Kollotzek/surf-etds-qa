@@ -39,6 +39,7 @@ import sys
 import json
 import numpy as np
 
+import data_paths
 from DataConverter import ETDQAProcessor
 from etds_qa_evaluation import compute_pair_index
 from kinematics_werror_v2 import SurfKinematics
@@ -57,16 +58,10 @@ def load_single_angle_measurement(full_config, target_linac, deflection):
     raise ValueError(f"Keine single-angle-Messung fuer Linac {target_linac}, Deflection {deflection} gefunden.")
 
 
-def find_raw_files(raw_base_dir, meta):
-    etd_stamp = meta["etds_timestamp"]
-    if len(etd_stamp) == 6 and "-" not in etd_stamp:
-        etd_stamp = f"{etd_stamp[:2]}-{etd_stamp[2:4]}-{etd_stamp[4:]}"
-    csv_files = [c for c in (raw_base_dir / "surf_phantom").rglob(f"*{meta['surf_timestamp']}.csv")
-                 if not c.name.endswith("_QA.csv")]
-    json_files = list((raw_base_dir / "etds_scans").rglob(f"*{etd_stamp}.json"))
-    if not csv_files or not json_files:
-        raise FileNotFoundError(f"Rohdaten fuer Messung fehlen (surf={meta['surf_timestamp']}, etd={meta['etds_timestamp']}).")
-    return str(csv_files[0]), str(json_files[0])
+def find_raw_files(target_linac, meta):
+    """Terminal-CSV und ETD-Export aus dem Submodule surf-etds-data (genau ein Treffer je Zeitstempel)."""
+    return (str(data_paths.surf_csv(target_linac, meta["surf_timestamp"])),
+            str(data_paths.etd_json(target_linac, meta["etds_timestamp"])))
 
 
 def run_diagnostic(target_linac, deflection):
@@ -75,7 +70,7 @@ def run_diagnostic(target_linac, deflection):
     with open(CONFIG_JSON_PATH, "r", encoding="utf-8") as f:
         full_config = json.load(f)
     m_id, meta = load_single_angle_measurement(full_config, target_linac, deflection)
-    csv_path, json_path = find_raw_files(Path(f"data/raw/L{target_linac}"), meta)
+    csv_path, json_path = find_raw_files(target_linac, meta)
 
     proc = ETDQAProcessor(terminal_version='legacy')
     proc.load_csv(csv_path)

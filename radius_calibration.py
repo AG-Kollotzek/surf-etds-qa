@@ -49,6 +49,7 @@ import numpy as np
 import pandas as pd
 from uncertainties import unumpy as unp
 
+import data_paths
 from kinematics_werror_v2 import SurfKinematics, SD_CALIB_DEFAULT
 from sphere_detection import load_sphere_detection, select_deflection_rows
 
@@ -67,10 +68,8 @@ def single_angle_tables(full_config):
 
 
 def qa_path(linac, surf_stamp):
-    hits = list(Path(f"data/raw/L{linac}/surf_phantom").rglob(f"*{surf_stamp}_QA.csv"))
-    if not hits:
-        raise FileNotFoundError(f"Keine _QA.csv fuer L{linac}, surf_timestamp {surf_stamp}.")
-    return hits[0]
+    """Sphere-Detection-Datei aus dem Submodule surf-etds-data (genau ein Treffer)."""
+    return data_paths.surf_qa_csv(linac, surf_stamp)
 
 
 def model_yz(h, v, r_pos, sd_calib, terminal_version='legacy'):
@@ -176,7 +175,7 @@ def main():
           f"{'':>11}{'':>11}{rms(points, 0.0):>10.3f}{rms(points, mean):>10.3f}")
     print(f"\n  SD zwischen den Linacs : {sd:.3f} mm")
     print(f"  Spanne                 : {vals.min():.3f} ... {vals.max():.3f} mm "
-          f"(= {vals.ptp():.3f} mm)")
+          f"(= {np.ptp(vals):.3f} mm)")
     print(f"  -> SD_CALIB_DEFAULT    : ufloat({mean:.3f}, {sd:.3f})")
 
     hinterlegt = float(unp.nominal_values(SD_CALIB_DEFAULT))
