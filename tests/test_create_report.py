@@ -13,10 +13,11 @@ import create_report as cr  # noqa: E402
 
 # Synthetic people only.
 PEOPLE = {"people": [
-    {"code": "QMP1", "role": "QMP", "name": "Erika Mustermann", "title": "Dr., MSc", "aliases": ["Riki"],
+    {"code": "QMP4", "role": "QMP", "name": "Erika Mustermann", "title": "Dr., MSc", "aliases": ["Riki"],
      "emails": ["erika@example.org", "e.m@example.com"]},
     {"code": "QMP2", "role": "QMP", "name": "Muster", "emails": []},
     {"code": "Student1", "role": "Student", "name": "Max Li Beispiel", "emails": ["max@example.org"]},
+    {"code": "Student3", "role": "Student", "name": "N. Initialperson", "emails": []},
 ]}
 
 
@@ -27,7 +28,7 @@ class SettingsTest(unittest.TestCase):
         self.people.write_text(json.dumps(PEOPLE), encoding="utf-8")
         self.config = self.tmp / "report_config.json"
         self.local_config = self.tmp / "report_config.local.json"
-        self.config.write_text(json.dumps({"authors": ["QMP2"], "approvers": ["QMP2"], "contact": "Lead1",
+        self.config.write_text(json.dumps({"authors": ["QMP2"], "approvers": ["QMP2"], "contact": "QMP4",
                                            "public_contact_url": "https://example.org/issues"}), encoding="utf-8")
         self.local_config.write_text(json.dumps({"people_file": str(self.people), "lab_url": "https://example.org/lab#x"}),
                               encoding="utf-8")
@@ -44,8 +45,8 @@ class SettingsTest(unittest.TestCase):
         public = cr.load_settings(public=True)
         self.assertIsNone(public["lab_url"])
         self.assertIsNone(public["people_file"])
-        cli = cr.load_settings(public=False, cli_authors="QMP1, Student1")
-        self.assertEqual(cli["authors"], ["QMP1", "Student1"])
+        cli = cr.load_settings(public=False, cli_authors="QMP4, Student1")
+        self.assertEqual(cli["authors"], ["QMP4", "Student1"])
 
     def test_names_are_rejected_as_codes(self):
         with self.assertRaises(cr.ReportError) as ctx:
@@ -138,7 +139,8 @@ class SettingsTest(unittest.TestCase):
     def test_short_name_parts_are_tokens(self):
         tokens = cr.local_name_tokens(self.local_config)
         self.assertIn("Li", tokens)
-        self.assertNotIn("M.", tokens)
+        self.assertIn("Initialperson", tokens)
+        self.assertNotIn("N.", tokens)
 
     def test_approver_role_must_be_qmp(self):
         data = json.loads(self.people.read_text(encoding="utf-8"))
