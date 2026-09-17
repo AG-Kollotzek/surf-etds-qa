@@ -1,0 +1,19 @@
+# local, personal configuration of the internal report - never commit
+report/report_config.local.json
+*.local.json
+people.local.json
+logo.local.*
+
+# generated
+report/build/
+report/output/
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# editors and operating systems
+.DS_Store
+.idea/
+.vscode/

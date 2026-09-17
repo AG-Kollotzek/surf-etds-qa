@@ -1,0 +1,17 @@
+# Normalise line endings so the measurement data cannot silently fork
+# between a Windows measurement laptop and a macOS/Linux analysis machine.
+* text=auto eol=lf
+
+*.csv  text eol=lf
+*.json text eol=lf
+*.txt  text eol=lf
+*.md   text eol=lf
+*.py   text eol=lf
+*.ino  text eol=lf
+*.h    text eol=lf
+*.m    text eol=lf
+*.yml  text eol=lf
+
+*.png  binary
+*.xlsx binary
+*.pdf  binary

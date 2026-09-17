@@ -1,0 +1,48 @@
+cff-version: 1.2.0
+title: "SURF ETDS yearly QA"
+message: "If you use this software, please cite it as below, and cite the data with the citation of surf-etds-data."
+type: software
+authors:
+  - given-names: Tim
+    family-names: Buck
+    affiliation: "Medical University of Innsbruck"
+  # Further contributors are listed in CONTRIBUTORS.md.
+repository-code: "https://github.com/AG-Kollotzek/surf-etds-qa"
+abstract: >-
+  Yearly quality assurance of the tracking accuracy of ExacTrac Dynamic Surface
+  across the linear accelerators of a radiotherapy department, measured with the
+  SURF Test Unit motion phantom: evaluation of the phantom and tracking logs,
+  pass-rate classification, calibration of the phantom kinematics against X-ray
+  sphere detection, and generation of per-linac QA reports.
+keywords:
+  - radiotherapy
+  - surface-guided radiotherapy
+  - SGRT
+  - quality assurance
+  - medical physics
+# The code is MIT; the documentation, the result tables and the report templates are CC-BY-4.0.
+license: MIT
+license-url: "https://github.com/AG-Kollotzek/surf-etds-qa/blob/main/README.md#licence"
+version: "1.0.0"
+references:
+  - type: data
+    title: "SURF-ETDS measurement data"
+    authors:
+      - given-names: Tim
+        family-names: Buck
+    repository-code: "https://github.com/AG-Kollotzek/surf-etds-data"
+    notes: >-
+      The raw data evaluated here (campaigns 2026-07-15_L1, 2026-07-29_L0,
+      2026-08-06_L3 and 2026-08-06_L4), included as a git submodule.
+  - type: software
+    title: "SURF Test Unit: a low-cost 3-DOF motion phantom for surface-guidance QA"
+    authors:
+      - given-names: Tim
+        family-names: Buck
+    repository-code: "https://github.com/AG-Kollotzek/surf-etds-phantom"
+  - type: software
+    title: "SURF ETD analysis pipeline"
+    authors:
+      - given-names: Tim
+        family-names: Buck
+    repository-code: "https://github.com/AG-Kollotzek/surf-etds-analysis"

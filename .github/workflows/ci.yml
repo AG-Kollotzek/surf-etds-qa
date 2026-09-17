@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    env:
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Compile
+        run: python -m compileall -q *.py tests
+
+      - name: Import
+        run: python -c "import data_paths, create_report, etds_qa_evaluation, geometry_diagnostic, radius_calibration, qa_metrics, qa_plots, DataConverter, sphere_detection, kinematics_werror_v2"
+
+      - name: Unit tests (no TeX needed)
+        run: python -m unittest discover -s tests -t . -v
