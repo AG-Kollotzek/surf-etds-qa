@@ -170,7 +170,8 @@ in `report/template/`, pulls names, e-mail addresses and the logo from the git-i
 `--public` produces a redacted variant with role codes and the issue-tracker URL only, no
 logo, written as `..._public.pdf`. Before writing the file it checks the rendered PDF text and
 metadata, as well as the intermediate `.tex` sources, against the e-mail addresses and names
-from the local people list, and refuses to produce the file if any are still present. Without
+from the local people list (including people who are named elsewhere with their consent), and
+refuses to produce the file if any are still present. Without
 the local people list it stops, unless `--no-people-list` is given (e-mail check only).
 
 Both variants read the same data sources from `data/process/L<n>/`:

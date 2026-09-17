@@ -53,9 +53,11 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(ctx.exception.status, 2)
 
     def test_only_qmp_may_approve(self):
-        with self.assertRaises(cr.ReportError) as ctx:
-            cr.load_settings(public=False, cli_approvers="Student1")
-        self.assertEqual(ctx.exception.status, 2)
+        for code in ("Student1", "Lead1"):
+            with self.assertRaises(cr.ReportError) as ctx:
+                cr.load_settings(public=False, cli_approvers=code)
+            self.assertEqual(ctx.exception.status, 2)
+        self.assertEqual(cr.load_settings(public=False, cli_authors="Lead1")["authors"], ["Lead1"])
 
     def test_committed_config_must_not_hold_local_keys(self):
         self.config.write_text(json.dumps({"lab_url": "https://example.org"}), encoding="utf-8")
@@ -92,11 +94,18 @@ class SettingsTest(unittest.TestCase):
         for token in ("Erika", "Mustermann", "Riki", "erika@example.org", "Beispiel"):
             self.assertIn(token, tokens)
 
-    def test_consented_public_name_is_not_a_token(self):
+    def test_consented_public_name_is_still_a_token(self):
         data = json.loads(self.people.read_text(encoding="utf-8"))
         data["people"][0].update(public_name="E. Mustermann", public_name_consent=True)
+        data["people"].append({"code": None, "name": "Autorin", "public_name": "A. Autorin", "public_name_consent": True})
         self.people.write_text(json.dumps(data), encoding="utf-8")
         tokens = cr.local_name_tokens(self.local_config)
+        self.assertIn("Mustermann", tokens)
+        self.assertIn("Autorin", tokens)
+        self.assertNotIn(None, cr.load_people(json.loads(self.local_config.read_text(encoding="utf-8"))))
+
+    def test_words_of_the_public_configuration_are_not_tokens(self):
+        tokens = cr.local_name_tokens(self.local_config, allowed_text="https://github.com/AG-Mustermann/issues")
         self.assertNotIn("Mustermann", tokens)
         self.assertIn("Erika", tokens)
 

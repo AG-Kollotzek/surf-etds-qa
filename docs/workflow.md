@@ -250,7 +250,7 @@ TOLERANCE_WATCH  = 2.0   # 1.0 < |AE| <= 2.0 -> watch ;  > 2.0 -> act
 
 The unit is that of the respective DoF: **mm** for translation, **degrees** for rotation.
 These values are injected into the LaTeX template as `<<TOL_ACCEPT>>` / `<<TOL_WATCH>>`
-(`create_report.py:661–662`) — the tolerance table in the report is therefore automatically
+(`create_report.py:666–667`) — the tolerance table in the report is therefore automatically
 consistent with the evaluation.
 
 ### 4.2 Sign convention
@@ -274,19 +274,19 @@ python create_report.py <linac_id> --public [--date YYYY-MM-DD] [--out PATH]
 ```
 
 Result: `report/output/ETDS_L<n>_QA_Report_<DATE>.pdf`, or `..._public.pdf` with `--public`
-(`create_report.py:692–693`).
+(`create_report.py:697–698`).
 
 Internal flow: the template `report/template/` is copied to `report/build/L<n>` (or
-`report/build/L<n>_public` with `--public`, `create_report.py:673`), every `<<PLACEHOLDER>>`
-token is substituted in a single pass (`render_templates`, `create_report.py:524–541`; a
+`report/build/L<n>_public` with `--public`, `create_report.py:678`), every `<<PLACEHOLDER>>`
+token is substituted in a single pass (`render_templates`, `create_report.py:528–545`; a
 missing value for a placeholder is fatal), then compiled with `latexmk -xelatex` (preferred) or
-two `xelatex` passes (`compile_pdf`, `create_report.py:544–563`). The build folder is cleaned
-up unless `--keep-build` is given (`create_report.py:697–700`).
+two `xelatex` passes (`compile_pdf`, `create_report.py:548–567`). The build folder is cleaned
+up unless `--keep-build` is given (`create_report.py:702–705`).
 
 ### 5.1 People and role codes
 
-Operators and reviewers appear in the templates only as role codes (`QMP<n>`, `Student<n>`,
-`RTT<n>`, matched against `ROLE_CODE`/`QMP_CODE`, `create_report.py:52–53`). Settings are
+Operators and reviewers appear in the templates only as role codes (`Lead<n>` for the lab lead,
+`QMP<n>`, `Student<n>`, `RTT<n>`, matched against `ROLE_CODE`/`QMP_CODE`, `create_report.py:52–53`). Settings are
 resolved in ascending precedence (`create_report.py:63–76,357–384`):
 
 1. `DEFAULTS` in the script (`create_report.py:65–75`) — institution `"tirol kliniken"`,
@@ -301,28 +301,30 @@ resolved in ascending precedence (`create_report.py:63–76,357–384`):
 
 Only role codes matching `QMP<n>` may approve and sign a report
 (`create_report.py:380–383`), and in the internal build their entry in the local people list
-must have the role `QMP` (`create_report.py:447–450`); anything else makes the run fail (exit
+must have the role `QMP` (`create_report.py:451–454`); anything else makes the run fail (exit
 status 2). The "Tested
-by" line accepts `QMP<n>`, `Student<n>` or `RTT<n>`.
+by" line and the contact accept `Lead<n>`, `QMP<n>`, `Student<n>` or `RTT<n>`.
 
 Names are resolved only for the internal build, via `people_file` from the local config
-(`load_people`, `create_report.py:387–396`); a code that is not in the list stops the internal
+(`people_entries`, `load_people`, `create_report.py:387–400`); a code that is not in the list stops the internal
 build. With `--public` the report shows the role codes themselves (`person_label`,
-`create_report.py:428–439`).
+`create_report.py:432–443`).
 
 ### 5.2 Public report (`--public`)
 
 `--public` produces a report that contains **only** role codes, the issue-tracker URL from
 `public_contact_url` as the contact, and no logo (`build_person_fields`,
-`create_report.py:442–494`). After compiling, `check_public_report` rejects the PDF if
-(`create_report.py:497–518`):
+`create_report.py:446–498`). After compiling, `check_public_report` rejects the PDF if
+(`create_report.py:501–522`):
 
 - the `.tex` sources contain `@`, `mailto:`, or an e-mail-address pattern (LaTeX column
   specifiers such as `@{}` are excluded from this check), or
 - the PDF text or PDF metadata (via `pdftotext`/`pdfinfo`) contain `@`, or
 - the `.tex` sources, PDF text, or PDF metadata contain a name, alias, or e-mail address from
-  the local people list. Without `report/report_config.local.json` and its `people_file`
-  the run stops before building (`local_name_tokens`, `create_report.py:399–425`);
+  the local people list, including people who are named elsewhere with their consent (only
+  words of `institution`, `phantom` and `public_contact_url` are skipped, e.g. the organisation
+  in the issue URL). Without `report/report_config.local.json` and its `people_file`
+  the run stops before building (`local_name_tokens`, `create_report.py:403–429`);
   `--no-people-list` skips the name check and prints a warning.
 
 If any of these checks trigger, report generation fails and no `_public.pdf` is written.

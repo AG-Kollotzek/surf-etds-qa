@@ -16,7 +16,7 @@ Quellen (alle aus data/process/L<linac>/):
 Die .tex-Vorlagen liegen in report/template und enthalten <<PLATZHALTER>>, die hier
 ersetzt werden. Kompiliert wird mit XeLaTeX (fontspec) in report/build/L<n>.
 
-Personen stehen in report/report_config.json nur als Rollen-Codes (QMP<n>, Student<n>).
+Personen stehen in report/report_config.json nur als Rollen-Codes (Lead<n>, QMP<n>, Student<n>).
 Der interne, unterschreibbare Report loest sie ueber die git-ignorierte
 report/report_config.local.json (people_file, lab_url, logo) in Namen auf. Freigeben und
 unterschreiben duerfen nur QMPs (Qualified Medical Physicists).
@@ -49,7 +49,7 @@ HISTORY_DIR = REPORT_DIR / "history"
 REPORT_CONFIG_PATH = REPORT_DIR / "report_config.json"
 REPORT_LOCAL_CONFIG_PATH = REPORT_DIR / "report_config.local.json"
 
-ROLE_CODE = re.compile(r"^(?:QMP|RTT|Student)[1-9][0-9]?$")
+ROLE_CODE = re.compile(r"^(?:Lead|QMP|RTT|Student)[1-9][0-9]?$")
 QMP_CODE = re.compile(r"^QMP[1-9][0-9]?$")
 MAIL = re.compile(r"[\w.+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 PLACEHOLDER = re.compile(r"<<([A-Z0-9_]+)>>")
@@ -375,7 +375,7 @@ def load_settings(public, cli_authors=None, cli_approvers=None, local_path=None)
 
     for code in settings["authors"] + ([settings["contact"]] if settings["contact"] else []):
         if not ROLE_CODE.match(code):
-            raise ReportError(f"'{code}' is not a role code (QMP<n>, Student<n>, RTT<n>); names belong in the "
+            raise ReportError(f"'{code}' is not a role code (Lead<n>, QMP<n>, Student<n>, RTT<n>); names belong in the "
                               "local people list only", status=2)
     for code in settings["approvers"]:
         if not QMP_CODE.match(code):
@@ -384,21 +384,28 @@ def load_settings(public, cli_authors=None, cli_approvers=None, local_path=None)
     return settings
 
 
-def load_people(settings):
-    """Rollen-Code -> Eintrag der lokalen Personenliste (people.json-Format); leer ohne Liste."""
+def people_entries(settings):
+    """Alle Eintraege der lokalen Personenliste (people.json-Format), auch Personen ohne Code; leer ohne Liste."""
     path = settings.get("people_file")
     if not path:
-        return {}
+        return []
     path = Path(path) if Path(path).is_absolute() else PROJECT_DIR / path
     if not path.is_file():
         raise ReportError(f"people list {path} not found (people_file in the local configuration)", status=2)
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return {p["code"]: p for p in data.get("people", []) if "code" in p}
+    return json.loads(path.read_text(encoding="utf-8")).get("people", [])
 
 
-def local_name_tokens(local_path=None, required=True):
+def load_people(settings):
+    """Rollen-Code -> Eintrag der lokalen Personenliste; leer ohne Liste."""
+    return {p["code"]: p for p in people_entries(settings) if p.get("code")}
+
+
+def local_name_tokens(local_path=None, required=True, allowed_text=""):
     """Namen, Aliase und E-Mail-Adressen der lokalen Liste - fuer die Pruefung des oeffentlichen Reports.
 
+    Auch Namen, die mit Einverstaendnis veroeffentlicht werden (z.B. als Autor:innen), bleiben
+    Pruefbegriffe: im Report stehen nur Codes. Ausgenommen sind nur Woerter, die im oeffentlichen
+    Text der Konfiguration vorkommen (allowed_text, z.B. "AG-Kollotzek" in der Issue-URL).
     Ohne lokale Konfiguration oder ohne people_file: ReportError, ausser required=False
     (--no-people-list), dann [] und nur die Pruefung auf E-Mail-Adressen.
     """
@@ -411,18 +418,15 @@ def local_name_tokens(local_path=None, required=True):
                           f"{local} does not exist or sets no people_file; create it from "
                           f"report/report_config.local.example.json, or pass --no-people-list to check for "
                           f"e-mail addresses only", status=2)
-    people = load_people(settings)
     tokens = set()
-    for person in people.values():
-        # consented public names (e.g. the surname in the organisation name) may appear
-        public = set()
-        if person.get("public_name_consent") is True:
-            public = set(NAME_SPLIT.split(str(person.get("public_name") or "")))
-        tokens.update(w for w in NAME_SPLIT.split(str(person.get("name", "")))
-                      if len(w) >= 3 and not w.endswith(".") and w not in public)
-        tokens.update(a for a in person.get("aliases", []) if len(a) >= 3 and a not in public)
+    for person in people_entries(settings):
+        tokens.update(w for w in NAME_SPLIT.split(str(person.get("name", ""))) if len(w) >= 3 and not w.endswith("."))
+        tokens.update(a for a in person.get("aliases", []) if len(a) >= 3)
         tokens.update(m for m in person.get("emails", []) if "noreply" not in m)
-    return sorted(tokens)
+
+    def in_allowed_text(token):
+        return re.search(r"(?<![A-Za-z])" + re.escape(token) + r"(?![A-Za-z])", allowed_text, re.IGNORECASE)
+    return sorted(t for t in tokens if not in_allowed_text(t))
 
 
 def person_label(code, people, public, with_title=False):
@@ -597,7 +601,8 @@ def run(args):
     settings = load_settings(args.public, args.author, args.approver, args.local_config)
     name_tokens = []
     if args.public:
-        name_tokens = local_name_tokens(args.local_config, required=not args.no_people_list)
+        public_text = " ".join(str(settings.get(key) or "") for key in ("institution", "phantom", "public_contact_url"))
+        name_tokens = local_name_tokens(args.local_config, required=not args.no_people_list, allowed_text=public_text)
         if args.no_people_list:
             print("[!] --no-people-list: the public report is checked for e-mail addresses only, not for names")
 

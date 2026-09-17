@@ -30,6 +30,19 @@ references:
     authors:
       - given-names: Tim
         family-names: Buck
+        affiliation: "Department of Radiation Oncology, Medical University of Innsbruck"
+      - given-names: N.
+        family-names: Bersenkowitsch
+        affiliation: "Department of Radiation Oncology, Tirol Kliniken"
+      - given-names: L.
+        family-names: Bodner
+        affiliation: "Department of Radiation Oncology, Tirol Kliniken"
+      - given-names: U.
+        family-names: Ganswindt
+        affiliation: "Department of Radiation Oncology, Medical University of Innsbruck"
+      - given-names: S.
+        family-names: Kollotzek
+        affiliation: "Department of Radiation Oncology, Medical University of Innsbruck"
     repository-code: "https://github.com/AG-Kollotzek/surf-etds-data"
     notes: >-
       The raw data evaluated here (campaigns 2026-07-15_L1, 2026-07-29_L0,
@@ -45,4 +58,17 @@ references:
     authors:
       - given-names: Tim
         family-names: Buck
+        affiliation: "Department of Radiation Oncology, Medical University of Innsbruck"
+      - given-names: N.
+        family-names: Bersenkowitsch
+        affiliation: "Department of Radiation Oncology, Tirol Kliniken"
+      - given-names: L.
+        family-names: Bodner
+        affiliation: "Department of Radiation Oncology, Tirol Kliniken"
+      - given-names: U.
+        family-names: Ganswindt
+        affiliation: "Department of Radiation Oncology, Medical University of Innsbruck"
+      - given-names: S.
+        family-names: Kollotzek
+        affiliation: "Department of Radiation Oncology, Medical University of Innsbruck"
     repository-code: "https://github.com/AG-Kollotzek/surf-etds-analysis"
