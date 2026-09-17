@@ -7,8 +7,8 @@
 
 \usepackage[a4paper,margin=1.8cm,top=2.2cm,bottom=2.2cm]{geometry}
 \usepackage{fontspec}
-\setmainfont{Arial}          % gleiche Schriftart wie die matplotlib-Plots (qa_plots.py)
-\setsansfont{Arial}
+% gleiche Schriftart wie die matplotlib-Plots (qa_plots.py); ohne Arial (z.B. Linux) TeX Gyre Heros
+\IfFontExistsTF{Arial}{\setmainfont{Arial}\setsansfont{Arial}}{\setmainfont{TeX Gyre Heros}\setsansfont{TeX Gyre Heros}}
 \renewcommand{\familydefault}{\sfdefault}
 \usepackage{xcolor}
 \usepackage{array}
@@ -50,21 +50,12 @@
 \newcommand{\ReportAuthor}{<<AUTHOR>>}
 \newcommand{\Institution}{<<INSTITUTION>>}
 \newcommand{\Phantom}{<<PHANTOM>>}
-\newcommand{\ContactName}{<<CONTACT_NAME>>}
-\newcommand{\ContactMailOne}{<<CONTACT_MAIL_1>>}
-\newcommand{\ContactMailTwo}{<<CONTACT_MAIL_2>>}
 
-% Briefkopf-Block: steht im Detailreport rechts neben den Abkuerzungen.
-% \href statt \url, damit die Adressen in der Dokumentschrift (Arial) statt in
-% Schreibmaschinenschrift gesetzt werden; \raggedright verhindert, dass der Blocksatz
-% das Trennzeichen zwischen den beiden Adressen ans Zeilenende schiebt.
+% Briefkopf-Block: steht im Detailreport rechts neben den Abkuerzungen. create_report.py setzt
+% ihn aus Rollen-Code und lokaler Personenliste (interner Report) bzw. dem oeffentlichen
+% Kontakt (--public) zusammen; leer, wenn nichts konfiguriert ist.
 \newcommand{\ContactBlock}{%
-  \raggedright
-  \textbf{Contact for data analysis and management:} \\
-  \ContactName \\
-  \href{mailto:<<CONTACT_MAIL_1>>}{\ContactMailOne} /
-  \href{mailto:<<CONTACT_MAIL_2>>}{\ContactMailTwo} \\
-  IGRT-Lab: \href{<<IGRT_LAB_URL>>}{<<IGRT_LAB_URL>>} \\
+<<CONTACT_BLOCK>>
 }
 
 % ---------- Kopf-/Fußzeile ----------
@@ -73,7 +64,7 @@
 \renewcommand{\headrulewidth}{0pt}
 \renewcommand{\footrulewidth}{0.4pt}
 \fancyfoot[L]{\footnotesize Report created on \CreationDate\ \CreationTime\\ Report created by \ReportAuthor}
-\fancyfoot[R]{\footnotesize \href{<<IGRT_LAB_URL>>}{<<IGRT_LAB_URL>>}\\ Page \thepage\ of \pageref{LastPage}}
+\fancyfoot[R]{\footnotesize <<FOOTER_URL>>\\ Page \thepage\ of \pageref{LastPage}}
 
 % Wiederkehrender Report-Kopf (auf jeder Seite)
 \newcommand{\ReportHeader}[1]{%
@@ -88,7 +79,7 @@
     \hfill
 \begin{tabular}[l]{@{}c@{}}
   {\bfseries\itshape }\\
-  \includegraphics[height=1.75cm]{Logo/logo.jpg}
+  <<LOGO>>
 \end{tabular}
   \end{tabular}
   \end{center}

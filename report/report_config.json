@@ -1,9 +1,14 @@
 {
-  "author": "QMP2, QMP3",
   "institution": "tirol kliniken",
   "phantom": "SURF",
-  "contact_name": "Lead1",
-  "contact_mail_1": "",
-  "contact_mail_2": "",
-  "igrt_lab_url": "https://igrt-lab.i-med.ac.at/"
+  "authors": [
+    "QMP2",
+    "QMP3"
+  ],
+  "approvers": [
+    "QMP2",
+    "QMP3"
+  ],
+  "contact": "Lead1",
+  "public_contact_url": "https://github.com/AG-Kollotzek/surf-etds-qa/issues"
 }

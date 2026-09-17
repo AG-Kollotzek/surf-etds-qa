@@ -1,0 +1,6 @@
+{
+  "_note": "Copy to report_config.local.json (git-ignored) for the internal, signable report.",
+  "people_file": "../people.local.json",
+  "lab_url": "https://example.org/lab/",
+  "logo": "report/logo.local.jpg"
+}

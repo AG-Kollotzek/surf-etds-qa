@@ -3,7 +3,9 @@
 Aufruf:
     python create_report.py 1                  # Linac 1, neueste Auswertung
     python create_report.py 1 --date 2026-07-29
-    python create_report.py 1 --author "Max Mustermann"
+    python create_report.py 1 --public          # codes only, no logo, checked for names and e-mail addresses
+    python create_report.py 1 --public --no-people-list   # without the local list: e-mail check only
+    python create_report.py 1 --author QMP2 --approver QMP2
 
 Quellen (alle aus data/process/L<linac>/):
     ETDS_L<n>_passrate_summary_<datum>.csv   -> Passraten je DOF (Seite 1)
@@ -13,6 +15,11 @@ Quellen (alle aus data/process/L<linac>/):
 
 Die .tex-Vorlagen liegen in report/template und enthalten <<PLATZHALTER>>, die hier
 ersetzt werden. Kompiliert wird mit XeLaTeX (fontspec) in report/build/L<n>.
+
+Personen stehen in report/report_config.json nur als Rollen-Codes (QMP<n>, Student<n>).
+Der interne, unterschreibbare Report loest sie ueber die git-ignorierte
+report/report_config.local.json (people_file, lab_url, logo) in Namen auf. Freigeben und
+unterschreiben duerfen nur QMPs (Qualified Medical Physicists).
 """
 
 import argparse
@@ -26,6 +33,7 @@ from pathlib import Path
 
 import pandas as pd
 
+import data_paths
 import qa_metrics
 
 # ==========================================
@@ -39,25 +47,33 @@ BUILD_ROOT = REPORT_DIR / "build"
 OUTPUT_DIR = REPORT_DIR / "output"
 HISTORY_DIR = REPORT_DIR / "history"
 REPORT_CONFIG_PATH = REPORT_DIR / "report_config.json"
+REPORT_LOCAL_CONFIG_PATH = REPORT_DIR / "report_config.local.json"
+
+ROLE_CODE = re.compile(r"^(?:QMP|RTT|Student)[1-9][0-9]?$")
+QMP_CODE = re.compile(r"^QMP[1-9][0-9]?$")
+MAIL = re.compile(r"[\w.+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+PLACEHOLDER = re.compile(r"<<([A-Z0-9_]+)>>")
+NAME_SPLIT = re.compile(r"[\s,;]+")
 
 # Reihenfolge wie im Muster-Report: erst Translationen, dann Rotationen.
 DOF_ORDER = ['longitudinal', 'lateral', 'vertical', 'roll', 'pitch', 'yaw']
 # Zeilenreihenfolge innerhalb eines DOF-Blocks: (Deflection, Pad-Temperatur)
 MEAS_ORDER = [(1, '32C'), (2, '32C'), (1, 'RT'), (2, 'RT')]
 
-# Fallbacks fuer Felder, die sich (noch) nicht aus den Daten ableiten lassen.
-DUMMY_DEFAULTS = {
-    "author": "Vorname Nachname",
+# Einstellungen in aufsteigendem Vorrang: DEFAULTS < report_config.json (nur Codes)
+# < report_config.local.json (nur interner Build) < Kommandozeile (nur Codes).
+DEFAULTS = {
     "institution": "tirol kliniken",
     "phantom": "SURF",
-    # Briefkopf im Detailreport (neben den Abkuerzungen) und URL unter dem ETDS-Schriftzug.
-    # Achtung: die Werte werden unescaped in die .tex-Vorlage eingesetzt - LaTeX-Sonderzeichen
-    # (_ % & # $) muessen in report_config.json bereits maskiert sein (z.B. "a\\_b").
-    "contact_name": "Lead1",
-    "contact_mail_1": "",
-    "contact_mail_2": "",
-    "igrt_lab_url": "https://igrt-lab.i-med.ac.at/",
+    "authors": [],             # Rollen-Codes der Durchfuehrenden
+    "approvers": [],           # Rollen-Codes, die freigeben und unterschreiben duerfen (nur QMP)
+    "contact": None,           # Rollen-Code der Kontaktperson (interner Report)
+    "public_contact_url": None,  # Kontakt im oeffentlichen Report (z.B. Issue-Tracker)
+    "people_file": None,       # nur lokal: Personenliste mit Namen und E-Mail-Adressen
+    "lab_url": None,           # nur lokal: URL im Briefkopf und in der Fusszeile
+    "logo": None,              # nur lokal: Logo-Datei fuer den Kopf
 }
+LOCAL_ONLY_KEYS = ("people_file", "lab_url", "logo")
 
 DESCRIPTION_TEXT = (
     "The aim of the annual quality assurance (QA) measurements is to evaluate the surface "
@@ -168,8 +184,7 @@ def measurement_datetime(linac):
 
     Rueckgabe (datum, zeit) als String oder (None, None), wenn nichts zuzuordnen ist.
     """
-    scans_dir = PROJECT_DIR / f"data/raw/L{linac}/etds_scans"
-    if not (CONFIG_JSON_PATH.exists() and scans_dir.exists()):
+    if not (CONFIG_JSON_PATH.exists() and data_paths.campaign_dirs(linac)):
         return None, None
 
     with open(CONFIG_JSON_PATH, "r", encoding="utf-8") as f:
@@ -182,8 +197,11 @@ def measurement_datetime(linac):
     for stamp in stamps:
         if len(stamp) != 6:
             continue
-        pattern = f"TrackingResult_*_{stamp[0:2]}-{stamp[2:4]}-{stamp[4:6]}.json"
-        for hit in scans_dir.glob(pattern):
+        try:
+            hits = [data_paths.etd_json(linac, stamp)]
+        except FileNotFoundError:
+            hits = []
+        for hit in hits:
             match = re.search(r"TrackingResult_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})", hit.name)
             if match:
                 found.append(datetime.strptime(f"{match.group(1)} {match.group(2)}:{match.group(3)}",
@@ -288,7 +306,7 @@ def build_history_table(linac, year, maxima):
     """Vorjahresvergleich: gepflegte Historie + automatisch die Werte des aktuellen Laufs."""
     lines = []
     for row in load_history(linac):
-        lines.append(" & ".join(row) + r" \\")
+        lines.append(" & ".join(tex_escape(cell) for cell in row) + r" \\")
     lines.append(f"{year} & {fmt_metric(maxima['mae'][0])} {maxima['mae'][1]} & "
                  f"{fmt_metric(maxima['rmse'][0])} {maxima['rmse'][1]} & "
                  f"{fmt_metric(maxima['max'][0])} {maxima['max'][1]} \\\\")
@@ -305,23 +323,222 @@ def build_plot_pages(plot_files):
 
 
 # ==========================================
+# PERSONEN, EINSTELLUNGEN & LATEX-SICHERHEIT
+# ==========================================
+class ReportError(Exception):
+    """Abbruch mit Exit-Status: 1 allgemein, 2 unzulaessige Personen-Codes."""
+
+    def __init__(self, message, status=1):
+        super().__init__(message)
+        self.status = status
+
+
+_TEX_SPECIAL = {"\\": r"\textbackslash{}", "&": r"\&", "%": r"\%", "$": r"\$", "#": r"\#", "_": r"\_",
+                "{": r"\{", "}": r"\}", "~": r"\textasciitilde{}", "^": r"\textasciicircum{}"}
+
+
+def tex_escape(value):
+    """Freitext aus Konfiguration oder Personenliste LaTeX-sicher machen."""
+    return "".join(_TEX_SPECIAL.get(ch, ch) for ch in str(value))
+
+
+def tex_url(url):
+    """URL fuer \\href: nur Zeichen maskieren, die dort Probleme machen."""
+    return str(url).replace("\\", "/").replace("%", r"\%").replace("#", r"\#").replace("{", "").replace("}", "")
+
+
+def _codes(value):
+    if value is None:
+        return []
+    items = value if isinstance(value, list) else str(value).split(",")
+    return [str(item).strip() for item in items if str(item).strip()]
+
+
+def load_settings(public, cli_authors=None, cli_approvers=None, local_path=None):
+    settings = dict(DEFAULTS)
+    if REPORT_CONFIG_PATH.exists():
+        committed = json.loads(REPORT_CONFIG_PATH.read_text(encoding="utf-8"))
+        leaked = [k for k in LOCAL_ONLY_KEYS if committed.get(k)]
+        if leaked:
+            raise ReportError(f"{REPORT_CONFIG_PATH.name} must not set {', '.join(leaked)}; "
+                              f"use {REPORT_LOCAL_CONFIG_PATH.name}")
+        settings.update(committed)
+    local = Path(local_path) if local_path else REPORT_LOCAL_CONFIG_PATH
+    if not public and local.exists():
+        settings.update(json.loads(local.read_text(encoding="utf-8")))
+    if cli_authors:
+        settings["authors"] = _codes(cli_authors)
+    if cli_approvers:
+        settings["approvers"] = _codes(cli_approvers)
+    settings["authors"] = _codes(settings["authors"])
+    settings["approvers"] = _codes(settings["approvers"])
+
+    for code in settings["authors"] + ([settings["contact"]] if settings["contact"] else []):
+        if not ROLE_CODE.match(code):
+            raise ReportError(f"'{code}' is not a role code (QMP<n>, Student<n>, RTT<n>); names belong in the "
+                              "local people list only", status=2)
+    for code in settings["approvers"]:
+        if not QMP_CODE.match(code):
+            raise ReportError(f"'{code}' may not approve or sign: only Qualified Medical Physicists (QMP<n>)",
+                              status=2)
+    return settings
+
+
+def load_people(settings):
+    """Rollen-Code -> Eintrag der lokalen Personenliste (people.json-Format); leer ohne Liste."""
+    path = settings.get("people_file")
+    if not path:
+        return {}
+    path = Path(path) if Path(path).is_absolute() else PROJECT_DIR / path
+    if not path.is_file():
+        raise ReportError(f"people list {path} not found (people_file in the local configuration)", status=2)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {p["code"]: p for p in data.get("people", []) if "code" in p}
+
+
+def local_name_tokens(local_path=None, required=True):
+    """Namen, Aliase und E-Mail-Adressen der lokalen Liste - fuer die Pruefung des oeffentlichen Reports.
+
+    Ohne lokale Konfiguration oder ohne people_file: ReportError, ausser required=False
+    (--no-people-list), dann [] und nur die Pruefung auf E-Mail-Adressen.
+    """
+    if not required:
+        return []
+    local = Path(local_path) if local_path else REPORT_LOCAL_CONFIG_PATH
+    settings = json.loads(local.read_text(encoding="utf-8")) if local.exists() else {}
+    if not settings.get("people_file"):
+        raise ReportError(f"the public report is checked against the names of the local people list, but "
+                          f"{local} does not exist or sets no people_file; create it from "
+                          f"report/report_config.local.example.json, or pass --no-people-list to check for "
+                          f"e-mail addresses only", status=2)
+    people = load_people(settings)
+    tokens = set()
+    for person in people.values():
+        # consented public names (e.g. the surname in the organisation name) may appear
+        public = set()
+        if person.get("public_name_consent") is True:
+            public = set(NAME_SPLIT.split(str(person.get("public_name") or "")))
+        tokens.update(w for w in NAME_SPLIT.split(str(person.get("name", "")))
+                      if len(w) >= 3 and not w.endswith(".") and w not in public)
+        tokens.update(a for a in person.get("aliases", []) if len(a) >= 3 and a not in public)
+        tokens.update(m for m in person.get("emails", []) if "noreply" not in m)
+    return sorted(tokens)
+
+
+def person_label(code, people, public, with_title=False):
+    """Oeffentlich: der Code. Intern: Name (optional mit Titel) aus der Personenliste."""
+    if public:
+        return code
+    person = people.get(code)
+    if person is None:
+        raise ReportError(f"role code {code} is not in the local people list", status=2)
+    name = person.get("name", code)
+    if with_title and person.get("title"):
+        before, _, after = str(person["title"]).partition(",")
+        name = f"{before.strip()} {name}" + (f", {after.strip()}" if after.strip() else "")
+    return name
+
+
+def build_person_fields(settings, public, build_dir):
+    """AUTHOR, APPROVERS, CONTACT_BLOCK, FOOTER_URL, LOGO und SIGNATURE_BLOCK fuer die Vorlagen."""
+    people = {} if public else load_people(settings)
+    authors = [person_label(c, people, public) for c in settings["authors"]]
+    approvers = [person_label(c, people, public) for c in settings["approvers"]]
+    for code in [] if public else settings["approvers"]:
+        if people[code].get("role", "QMP") != "QMP":
+            raise ReportError(f"{code} is listed with role {people[code]['role']} in the local people list and "
+                              "may not approve or sign", status=2)
+
+    lines = []
+    if public:
+        url = settings.get("public_contact_url")
+        if url:
+            lines += [r"\textbf{Contact:} \\", r"\href{" + tex_url(url) + "}{" + tex_escape(url) + r"} \\"]
+        footer_url = url
+    else:
+        footer_url = settings.get("lab_url")
+        if settings.get("contact"):
+            code = settings["contact"]
+            person = people.get(code, {})
+            lines += [r"\textbf{Contact for data analysis and management:} \\",
+                      tex_escape(person_label(code, people, public, with_title=True)) + r" \\"]
+            mails = [m for m in person.get("emails", []) if "noreply" not in m][:2]
+            if mails:
+                lines.append(" / ".join(r"\href{mailto:" + tex_url(m) + "}{" + tex_escape(m) + "}" for m in mails)
+                             + r" \\")
+        if footer_url:
+            lines.append(r"IGRT-Lab: \href{" + tex_url(footer_url) + "}{" + tex_escape(footer_url) + r"} \\")
+    contact_block = (r"\raggedright" + "\n" + "\n".join(lines)) if lines else ""
+    footer = (r"\href{" + tex_url(footer_url) + "}{" + tex_escape(footer_url) + "}") if footer_url else ""
+
+    logo = ""
+    if not public and settings.get("logo"):
+        source = Path(settings["logo"]) if Path(settings["logo"]).is_absolute() else PROJECT_DIR / settings["logo"]
+        if not source.exists():
+            raise ReportError(f"logo {source} not found")
+        target = build_dir / f"logo{source.suffix.lower()}"
+        shutil.copyfile(source, target)
+        logo = r"\includegraphics[height=1.75cm]{" + target.name + "}"
+
+    signature = ""
+    if approvers:
+        signature = ("\\vspace{2cm}\n\\noindent\n\\begin{tabularx}{\\linewidth}{@{}X@{\\hspace{1.5cm}}X@{}}\n"
+                     "\\hrulefill & \\hrulefill \\\\\n"
+                     "Date & Signature (" + tex_escape(" / ".join(approvers)) + ") \\\\\n\\end{tabularx}")
+    return {
+        "AUTHOR": tex_escape(", ".join(authors)),
+        "CONTACT_BLOCK": contact_block,
+        "FOOTER_URL": footer,
+        "LOGO": logo,
+        "SIGNATURE_BLOCK": signature,
+    }
+
+
+def check_public_report(build_dir, pdf, name_tokens):
+    """Oeffentlicher Report: keine E-Mail-Adressen, kein '@', kein mailto:, keine Namen der lokalen Liste."""
+    problems = []
+    tex_text = "\n".join(t.read_text(encoding="utf-8") for t in sorted(build_dir.rglob("*.tex")))
+    tex_without_colspec = tex_text.replace("@{}", "").replace("@{\\hspace{1.5cm}}", "")
+    if "@" in tex_without_colspec or "mailto:" in tex_text or MAIL.search(tex_text):
+        problems.append("the .tex sources contain '@', an e-mail address or mailto:")
+    tools = {name: shutil.which(name) for name in ("pdftotext", "pdfinfo")}
+    if not all(tools.values()):
+        raise ReportError("pdftotext and pdfinfo (poppler) are needed to check a public report")
+    pdf_text = subprocess.run([tools["pdftotext"], "-q", str(pdf), "-"], capture_output=True, text=True).stdout
+    pdf_meta = subprocess.run([tools["pdfinfo"], str(pdf)], capture_output=True, text=True).stdout
+    pdf_meta += subprocess.run([tools["pdfinfo"], "-meta", str(pdf)], capture_output=True, text=True).stdout
+    if "@" in pdf_text or "@" in pdf_meta:
+        problems.append("the PDF text or metadata contain '@'")
+    for token in name_tokens:
+        rx = re.compile(r"(?<![A-Za-z])" + re.escape(token) + r"(?![A-Za-z])", re.IGNORECASE)
+        for label, text in (("tex", tex_text), ("PDF text", pdf_text), ("PDF metadata", pdf_meta)):
+            if rx.search(text):
+                problems.append(f"a name of the local people list appears in the {label} ({token[0]}{'*' * (len(token) - 1)})")
+    if problems:
+        raise ReportError("public report rejected: " + "; ".join(problems))
+
+
+# ==========================================
 # VORLAGEN FUELLEN & KOMPILIEREN
 # ==========================================
 def render_templates(build_dir, replacements):
-    """Vorlage nach build_dir kopieren und alle <<PLATZHALTER>> ersetzen."""
-    if build_dir.exists():
-        shutil.rmtree(build_dir)
-    shutil.copytree(TEMPLATE_DIR, build_dir)
+    """Vorlage nach build_dir kopieren (der Ordner ist frisch angelegt) und alle <<PLATZHALTER>> ersetzen."""
+    shutil.copytree(TEMPLATE_DIR, build_dir, dirs_exist_ok=True)
 
-    unresolved = set()
+    missing = set()
+
+    def substitute(match):
+        key = match.group(1)
+        if key not in replacements:
+            missing.add(key)
+            return match.group(0)
+        return str(replacements[key])
+
     for tex in build_dir.rglob("*.tex"):
-        text = tex.read_text(encoding="utf-8")
-        for key, value in replacements.items():
-            text = text.replace(f"<<{key}>>", str(value))
-        unresolved.update(re.findall(r"<<([A-Z_]+)>>", text))
-        tex.write_text(text, encoding="utf-8")
-    if unresolved:
-        print(f"   [!] Unersetzte Platzhalter: {', '.join(sorted(unresolved))}")
+        # ein Durchgang: eingesetzte Werte werden nicht erneut nach Platzhaltern durchsucht
+        tex.write_text(PLACEHOLDER.sub(substitute, tex.read_text(encoding="utf-8")), encoding="utf-8")
+    if missing:
+        raise ReportError(f"no value for placeholder(s) {', '.join(sorted(missing))}")
 
 
 def compile_pdf(build_dir):
@@ -353,23 +570,36 @@ def main():
     parser = argparse.ArgumentParser(description="Erzeugt den jaehrlichen ETDS-QA-Report als PDF.")
     parser.add_argument("linac", help="Linac-ID, z.B. 1")
     parser.add_argument("--date", help="Auswertungsdatum YYYY-MM-DD (Standard: neueste Auswertung)")
-    parser.add_argument("--author", help="Name unter 'Tested by' (Standard: aus report_config.json)")
+    parser.add_argument("--author", help="Rollen-Codes unter 'Tested by', z.B. QMP2,QMP3 (Standard: report_config.json)")
+    parser.add_argument("--approver", help="Rollen-Codes der Freigabe (nur QMP<n>; Standard: report_config.json)")
+    parser.add_argument("--public", action="store_true",
+                        help="oeffentlicher Report: nur Codes, Issue-Tracker, kein Logo; wird auf Namen geprueft")
+    parser.add_argument("--no-people-list", action="store_true",
+                        help="--public ohne lokale Personenliste: nur auf E-Mail-Adressen pruefen")
+    parser.add_argument("--local-config", help="lokale Konfiguration (Standard: report/report_config.local.json)")
     parser.add_argument("--out", help="Zielpfad des PDFs (Standard: report/output/...)")
     parser.add_argument("--keep-build", action="store_true", help="Build-Ordner nicht aufraeumen")
     args = parser.parse_args()
+    try:
+        return run(args)
+    except ReportError as e:
+        print(f"[X] {e}")
+        return e.status
 
+
+def run(args):
     linac = args.linac
     process_dir = PROJECT_DIR / f"data/process/L{linac}"
     if not process_dir.exists():
         print(f"[X] Kein Auswertungsordner {process_dir}.")
         return 1
 
-    settings = dict(DUMMY_DEFAULTS)
-    if REPORT_CONFIG_PATH.exists():
-        with open(REPORT_CONFIG_PATH, "r", encoding="utf-8") as f:
-            settings.update(json.load(f))
-    if args.author:
-        settings["author"] = args.author
+    settings = load_settings(args.public, args.author, args.approver, args.local_config)
+    name_tokens = []
+    if args.public:
+        name_tokens = local_name_tokens(args.local_config, required=not args.no_people_list)
+        if args.no_people_list:
+            print("[!] --no-people-list: the public report is checked for e-mail addresses only, not for names")
 
     # ---------- Quellen einlesen ----------
     try:
@@ -407,7 +637,7 @@ def main():
     meas_date, meas_time = measurement_datetime(linac)
     if meas_date is None:
         meas_date, meas_time = "TT/MM/JJJJ", "HH:MM"   # Dummy: kein Rohscan zugeordnet
-        print("   [!] Messdatum/-zeit nicht aus data/raw ableitbar - Dummy eingesetzt.")
+        print("   [!] Messdatum/-zeit nicht aus surf-etds-data ableitbar - Dummy eingesetzt.")
     data_date = _date_from_name(numqa_csv)
     year = data_date[:4] if data_date else datetime.now().strftime("%Y")
     now = datetime.now()
@@ -419,13 +649,8 @@ def main():
         "MEAS_TIME": meas_time,
         "CREATION_DATE": now.strftime("%d/%m/%Y"),
         "CREATION_TIME": now.strftime("%H:%M"),
-        "AUTHOR": settings["author"],
-        "INSTITUTION": settings["institution"],
-        "PHANTOM": settings["phantom"],
-        "CONTACT_NAME": settings["contact_name"],
-        "CONTACT_MAIL_1": settings["contact_mail_1"],
-        "CONTACT_MAIL_2": settings["contact_mail_2"],
-        "IGRT_LAB_URL": settings["igrt_lab_url"],
+        "INSTITUTION": tex_escape(settings["institution"]),
+        "PHANTOM": tex_escape(settings["phantom"]),
         "OVERALL_PASSRATE": fmt_number(pooled_passrate),
         "VERDICT_COLOR": VERDICT_COLOR[overall_verdict],
         "VERDICT_LABEL": VERDICT_LABEL[overall_verdict],
@@ -445,7 +670,11 @@ def main():
     }
 
     # ---------- Rendern & kompilieren ----------
-    build_dir = BUILD_ROOT / f"L{linac}"
+    build_dir = BUILD_ROOT / f"L{linac}{'_public' if args.public else ''}"
+    if build_dir.exists():
+        shutil.rmtree(build_dir)
+    build_dir.mkdir(parents=True)
+    replacements.update(build_person_fields(settings, args.public, build_dir))
     render_templates(build_dir, replacements)
     (build_dir / "plots").mkdir(exist_ok=True)
     for name, source in plot_files:
@@ -458,7 +687,10 @@ def main():
         return 1
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    target = Path(args.out) if args.out else OUTPUT_DIR / f"ETDS_L{linac}_QA_Report_{data_date}.pdf"
+    if args.public:
+        check_public_report(build_dir, pdf, name_tokens)
+    suffix = "_public" if args.public else ""
+    target = Path(args.out) if args.out else OUTPUT_DIR / f"ETDS_L{linac}_QA_Report_{data_date}{suffix}.pdf"
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(pdf, target)
 
