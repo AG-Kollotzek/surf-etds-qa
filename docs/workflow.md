@@ -1,6 +1,6 @@
 # ETDS Annual QA Workflow — From Raw Data to the Report
 
-State: release 1.0.0 (September 2026), first written for the scripts of 2026-08-04 (commit `df0815c`).
+State: release 1.0.0 (September 2026), first written for the scripts of 2026-08-04 (commit `7c6b574`).
 This document describes only the **currently
 implemented workflow** — not the target state. Known pitfalls are listed in Section 7.
 
