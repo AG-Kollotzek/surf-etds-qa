@@ -13,10 +13,10 @@ import create_report as cr  # noqa: E402
 
 # Synthetic people only.
 PEOPLE = {"people": [
-    {"code": "QMP1", "name": "Erika Mustermann", "title": "Dr., MSc", "aliases": ["Riki"],
+    {"code": "QMP1", "role": "QMP", "name": "Erika Mustermann", "title": "Dr., MSc", "aliases": ["Riki"],
      "emails": ["erika@example.org", "e.m@example.com"]},
-    {"code": "QMP2", "name": "Muster", "emails": []},
-    {"code": "Student1", "name": "Max Beispiel", "emails": ["max@example.org"]},
+    {"code": "QMP2", "role": "QMP", "name": "Muster", "emails": []},
+    {"code": "Student1", "role": "Student", "name": "Max Li Beispiel", "emails": ["max@example.org"]},
 ]}
 
 
@@ -127,6 +127,19 @@ class SettingsTest(unittest.TestCase):
         self.assertIn("Beispiel", tokens)
         self.assertNotIn("Beispiel,", tokens)
 
+    def test_approver_without_role_may_not_sign(self):
+        data = json.loads(self.people.read_text(encoding="utf-8"))
+        del data["people"][1]["role"]
+        self.people.write_text(json.dumps(data), encoding="utf-8")
+        with self.assertRaises(cr.ReportError) as ctx:
+            cr.build_person_fields(cr.load_settings(public=False), public=False, build_dir=self.tmp)
+        self.assertEqual(ctx.exception.status, 2)
+
+    def test_short_name_parts_are_tokens(self):
+        tokens = cr.local_name_tokens(self.local_config)
+        self.assertIn("Li", tokens)
+        self.assertNotIn("M.", tokens)
+
     def test_approver_role_must_be_qmp(self):
         data = json.loads(self.people.read_text(encoding="utf-8"))
         data["people"][1]["role"] = "Student"
@@ -140,13 +153,14 @@ class SettingsTest(unittest.TestCase):
         old = cr.HISTORY_DIR
         cr.HISTORY_DIR = self.tmp
         try:
-            (self.tmp / "L9_history.csv").write_text("Year;Max_MAE;Max_RMSE;Max_AbsError\n2025;0.5 mm;1 %;a_b\n",
+            (self.tmp / "L9_history.csv").write_text("Year;Max_MAE;Max_RMSE;Max_AbsError\n2025;0.5 deg;1 %;a_b\n",
                                                      encoding="utf-8")
             maxima = {"mae": (0.1, "mm"), "rmse": (0.2, "mm"), "max": (0.3, "mm")}
             table = cr.build_history_table(9, 2026, maxima)
         finally:
             cr.HISTORY_DIR = old
         self.assertIn(r"1 \%", table)
+        self.assertIn(r"0.5 $^\circ$", table)
         self.assertIn(r"a\_b", table)
 
 

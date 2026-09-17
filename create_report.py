@@ -54,6 +54,7 @@ QMP_CODE = re.compile(r"^QMP[1-9][0-9]?$")
 MAIL = re.compile(r"[\w.+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 PLACEHOLDER = re.compile(r"<<([A-Z0-9_]+)>>")
 NAME_SPLIT = re.compile(r"[\s,;]+")
+DEGREE_UNIT = re.compile(r"\s*(?:°|\bdeg(?:rees?)?)\s*$")  # history cells: "0.3 deg" as in unit_tex()
 
 # Reihenfolge wie im Muster-Report: erst Translationen, dann Rotationen.
 DOF_ORDER = ['longitudinal', 'lateral', 'vertical', 'roll', 'pitch', 'yaw']
@@ -306,7 +307,8 @@ def build_history_table(linac, year, maxima):
     """Vorjahresvergleich: gepflegte Historie + automatisch die Werte des aktuellen Laufs."""
     lines = []
     for row in load_history(linac):
-        lines.append(" & ".join(tex_escape(cell) for cell in row) + r" \\")
+        cells = [DEGREE_UNIT.sub(lambda m: r" $^\circ$", tex_escape(cell)) for cell in row]
+        lines.append(" & ".join(cells) + r" \\")
     lines.append(f"{year} & {fmt_metric(maxima['mae'][0])} {maxima['mae'][1]} & "
                  f"{fmt_metric(maxima['rmse'][0])} {maxima['rmse'][1]} & "
                  f"{fmt_metric(maxima['max'][0])} {maxima['max'][1]} \\\\")
@@ -420,8 +422,9 @@ def local_name_tokens(local_path=None, required=True, allowed_text=""):
                           f"e-mail addresses only", status=2)
     tokens = set()
     for person in people_entries(settings):
-        tokens.update(w for w in NAME_SPLIT.split(str(person.get("name", ""))) if len(w) >= 3 and not w.endswith("."))
-        tokens.update(a for a in person.get("aliases", []) if len(a) >= 3)
+        # initials ("N.") are skipped; short name parts ("Li") are checked too
+        tokens.update(w for w in NAME_SPLIT.split(str(person.get("name", ""))) if len(w) >= 2 and not w.endswith("."))
+        tokens.update(a for a in person.get("aliases", []) if len(a) >= 2)
         tokens.update(m for m in person.get("emails", []) if "noreply" not in m)
 
     def in_allowed_text(token):
@@ -449,8 +452,8 @@ def build_person_fields(settings, public, build_dir):
     authors = [person_label(c, people, public) for c in settings["authors"]]
     approvers = [person_label(c, people, public) for c in settings["approvers"]]
     for code in [] if public else settings["approvers"]:
-        if people[code].get("role", "QMP") != "QMP":
-            raise ReportError(f"{code} is listed with role {people[code]['role']} in the local people list and "
+        if people[code].get("role") != "QMP":  # a missing role does not count as QMP
+            raise ReportError(f"{code} has role {people[code].get('role')!r} in the local people list, not QMP, and "
                               "may not approve or sign", status=2)
 
     lines = []
@@ -693,7 +696,11 @@ def run(args):
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     if args.public:
-        check_public_report(build_dir, pdf, name_tokens)
+        try:
+            check_public_report(build_dir, pdf, name_tokens)
+        except ReportError:
+            pdf.unlink(missing_ok=True)  # no rejected PDF is left behind
+            raise
     suffix = "_public" if args.public else ""
     target = Path(args.out) if args.out else OUTPUT_DIR / f"ETDS_L{linac}_QA_Report_{data_date}{suffix}.pdf"
     target.parent.mkdir(parents=True, exist_ok=True)

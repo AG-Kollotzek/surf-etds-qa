@@ -250,7 +250,7 @@ TOLERANCE_WATCH  = 2.0   # 1.0 < |AE| <= 2.0 -> watch ;  > 2.0 -> act
 
 The unit is that of the respective DoF: **mm** for translation, **degrees** for rotation.
 These values are injected into the LaTeX template as `<<TOL_ACCEPT>>` / `<<TOL_WATCH>>`
-(`create_report.py:666–667`) — the tolerance table in the report is therefore automatically
+(`create_report.py:669–670`) — the tolerance table in the report is therefore automatically
 consistent with the evaluation.
 
 ### 4.2 Sign convention
@@ -274,22 +274,22 @@ python create_report.py <linac_id> --public [--date YYYY-MM-DD] [--out PATH]
 ```
 
 Result: `report/output/ETDS_L<n>_QA_Report_<DATE>.pdf`, or `..._public.pdf` with `--public`
-(`create_report.py:697–698`).
+(`create_report.py:704–705`).
 
 Internal flow: the template `report/template/` is copied to `report/build/L<n>` (or
-`report/build/L<n>_public` with `--public`, `create_report.py:678`), every `<<PLACEHOLDER>>`
-token is substituted in a single pass (`render_templates`, `create_report.py:528–545`; a
+`report/build/L<n>_public` with `--public`, `create_report.py:681`), every `<<PLACEHOLDER>>`
+token is substituted in a single pass (`render_templates`, `create_report.py:531–548`; a
 missing value for a placeholder is fatal), then compiled with `latexmk -xelatex` (preferred) or
-two `xelatex` passes (`compile_pdf`, `create_report.py:548–567`). The build folder is cleaned
-up unless `--keep-build` is given (`create_report.py:702–705`).
+two `xelatex` passes (`compile_pdf`, `create_report.py:551–570`). The build folder is cleaned
+up unless `--keep-build` is given (`create_report.py:709–712`).
 
 ### 5.1 People and role codes
 
 Operators and reviewers appear in the templates only as role codes (`Lead<n>` for the lab lead,
 `QMP<n>`, `Student<n>`, `RTT<n>`, matched against `ROLE_CODE`/`QMP_CODE`, `create_report.py:52–53`). Settings are
-resolved in ascending precedence (`create_report.py:63–76,357–384`):
+resolved in ascending precedence (`create_report.py:64–77,359–386`):
 
-1. `DEFAULTS` in the script (`create_report.py:65–75`) — institution `"tirol kliniken"`,
+1. `DEFAULTS` in the script (`create_report.py:66–76`) — institution `"tirol kliniken"`,
    phantom `"SURF"`.
 2. the committed `report/report_config.json` — role codes only: `authors`, `approvers`,
    `contact`, plus `institution`, `phantom`, `public_contact_url` (the issue-tracker URL).
@@ -300,22 +300,22 @@ resolved in ascending precedence (`create_report.py:63–76,357–384`):
 4. `--author` / `--approver` on the command line (role codes only).
 
 Only role codes matching `QMP<n>` may approve and sign a report
-(`create_report.py:380–383`), and in the internal build their entry in the local people list
-must have the role `QMP` (`create_report.py:451–454`); anything else makes the run fail (exit
+(`create_report.py:382–385`), and in the internal build their entry in the local people list
+must have the role `QMP` (`create_report.py:454–457`); anything else makes the run fail (exit
 status 2). The "Tested
 by" line and the contact accept `Lead<n>`, `QMP<n>`, `Student<n>` or `RTT<n>`.
 
 Names are resolved only for the internal build, via `people_file` from the local config
-(`people_entries`, `load_people`, `create_report.py:387–400`); a code that is not in the list stops the internal
+(`people_entries`, `load_people`, `create_report.py:389–402`); a code that is not in the list stops the internal
 build. With `--public` the report shows the role codes themselves (`person_label`,
-`create_report.py:432–443`).
+`create_report.py:435–446`).
 
 ### 5.2 Public report (`--public`)
 
 `--public` produces a report that contains **only** role codes, the issue-tracker URL from
 `public_contact_url` as the contact, and no logo (`build_person_fields`,
-`create_report.py:446–498`). After compiling, `check_public_report` rejects the PDF if
-(`create_report.py:501–522`):
+`create_report.py:449–501`). After compiling, `check_public_report` rejects the PDF if
+(`create_report.py:504–525`):
 
 - the `.tex` sources contain `@`, `mailto:`, or an e-mail-address pattern (LaTeX column
   specifiers such as `@{}` are excluded from this check), or
@@ -324,7 +324,7 @@ build. With `--public` the report shows the role codes themselves (`person_label
   the local people list, including people who are named elsewhere with their consent (only
   words of `institution`, `phantom` and `public_contact_url` are skipped, e.g. the organisation
   in the issue URL). Without `report/report_config.local.json` and its `people_file`
-  the run stops before building (`local_name_tokens`, `create_report.py:403–429`);
+  the run stops before building (`local_name_tokens`, `create_report.py:405–432`);
   `--no-people-list` skips the name check and prints a warning.
 
 If any of these checks trigger, report generation fails and no `_public.pdf` is written.
@@ -339,10 +339,10 @@ If any of these checks trigger, report generation fails and no `_public.pdf` is 
 | `single_angle/L<n>_<RT\|32>_Couch*_<date>_QA.pdf` | plot pages in the appendix |
 | `report/report_config.json` + `report/report_config.local.json` | role codes/names, `institution`, `phantom`, contact, logo |
 | `report/history/L<n>_history.csv` | previous years' values (`;`-separated, `#` lines are comments) |
-| `surf-etds-data/campaigns/*_L<n>/etd/` | measurement date/time in the header, earliest single-angle scan (`measurement_datetime`, `create_report.py:182–212`) |
+| `surf-etds-data/campaigns/*_L<n>/etd/` | measurement date/time in the header, earliest single-angle scan (`measurement_datetime`, `create_report.py:183–213`) |
 
 Without `--date`, **each source is chosen independently** as the newest available file
-(`find_latest_csv`, `find_latest_plot`, `create_report.py:150–179`). The plot lookup prefers
+(`find_latest_csv`, `find_latest_plot`, `create_report.py:151–180`). The plot lookup prefers
 Couch 0.
 
 ### 5.4 Verdict logic (`classify_rates`)
@@ -353,7 +353,7 @@ Couch 0.
 | **Watch** | pass 95–99 % with 1–5 % watch |
 | **Pass** | otherwise |
 
-(`create_report.py:122–133`.) The traffic-light box on page 1 shows the **worst** result of
+(`create_report.py:123–134`.) The traffic-light box on page 1 shows the **worst** result of
 all six DoF, the largest absolute error, and the pooled overall pass rate.
 
 ### 5.5 LaTeX iteration without recomputation
@@ -392,7 +392,7 @@ Run all three evaluation steps **on the same day** (see 7.1).
 Folder and file names carry the **date the script was run**, not the measurement date.
 `create_report.py` looks up the metrics CSV and the plot PDF **independently of each other**,
 each choosing the newest available version (`find_latest_csv`, `find_latest_plot`,
-`create_report.py:150–179`). If `plotqa` is run on one day and `numqa` is not run along with
+`create_report.py:151–180`). If `plotqa` is run on one day and `numqa` is not run along with
 it, the report ends up combining new plots with old numbers.
 
 **Recommendation:** always run `plotqa` → `numqa` → `create_report.py` as one block, and
